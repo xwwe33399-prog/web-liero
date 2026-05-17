@@ -119,8 +119,8 @@
 /* ================================================================
    PUNKKIPELI MASSIVE ENGINE v18 ONLINE - © Eeli Noronen 2026
    - Full Firebase Multiplayer (Host/Join) with Gamepad HTML UI
-   - FIXED: drawPlaying Array.forEach crash ([currentLang] removed)
-   - Proper Loading Screen implementation & safety checks
+   - FIXED: Undefined NaN HP bug solved (Strict property checks)
+   - FIXED: True loading sync (Waits for both to load terrain)
    ================================================================ */
 
 // --- YLEISET APUFUNKTIOT ---
@@ -265,25 +265,39 @@ let currentLobbyData = null;
 let hasP2Joined = false;
 let amIReady = false;
 
+// TÄYDELLISESTI SYNKRONOITU LATAUS (Korjaus)
 function startFadeToGame(genNew){
   if (gameState === STATE_FADING || gameState === STATE_LOADING || gameState === STATE_COUNTDOWN) return;
   gameState=STATE_FADING; fadeAlpha=0;
+  
   const fi=setInterval(()=>{
     fadeAlpha+=0.05;
     if(fadeAlpha>=1.0){
       clearInterval(fi); 
       gameState=STATE_LOADING; 
+      
       setTimeout(()=>{
         initGame(genNew);
-        const fi2=setInterval(()=>{
-          fadeAlpha-=0.05;
-          if(fadeAlpha<=0){
-            clearInterval(fi2); gameState=STATE_COUNTDOWN;
-            countdownValue=3;countdownTimer=60; playSound('spawn');
-            listenToEvents(); startListeningToRemote(); startGameMusic();
-          }
-        },30);
-      }, 1500); 
+        // Ilmoitetaan palvelimelle, että meidän kone on ladannut mapin!
+        db.ref('lobbies/' + currentLobbyId + '/p' + (myPlayerId+1)).update({loaded: true});
+        
+        // Odotetaan, että MYÖS toinen pelaaja on ladannut mapin
+        const checkLoad = setInterval(()=>{
+            if(currentLobbyData && currentLobbyData.p1 && currentLobbyData.p1.loaded && currentLobbyData.p2 && currentLobbyData.p2.loaded) {
+                clearInterval(checkLoad);
+                
+                const fi2=setInterval(()=>{
+                  fadeAlpha-=0.05;
+                  if(fadeAlpha<=0){
+                    clearInterval(fi2); 
+                    gameState=STATE_COUNTDOWN;
+                    countdownValue=3;countdownTimer=60; playSound('spawn');
+                    listenToEvents(); startListeningToRemote(); startGameMusic();
+                  }
+                },30);
+            }
+        }, 100);
+      }, 500); 
     }
   },30);
 }
@@ -541,7 +555,7 @@ function createLobby(name, kills) {
     
     lobbyRef.set({
         name: name, killsToWin: kills, mapSeed: RNG_SEED, state: 'waiting', ping: latencyPing,
-        p1: { ready: false }, p2: null, left: false
+        p1: { ready: false, loaded: false }, p2: null, left: false
     });
     
     lobbyRef.on('value', snap => {
@@ -580,7 +594,7 @@ function joinLobby(lobbyId) {
             RNG_SEED = data.mapSeed;
             
             lobbyRef.child('left').onDisconnect().set(true);
-            lobbyRef.child('p2').set({ready: false});
+            lobbyRef.child('p2').set({ready: false, loaded: false});
             
             lobbyRef.on('value', snap => {
                 currentLobbyData = snap.val();
@@ -702,9 +716,16 @@ function startListeningToRemote() {
         const data = snap.val();
         if(data && players[remoteId]) {
             let p = players[remoteId];
-            p.x = data.x; p.y = data.y; p.aimAngle = data.aim;
-            p.facingRight = data.fr; p.weaponIndex = data.w; p.isWalking = data.walk;
-            p.hp = data.hp; p.kills = data.kills;
+            
+            // KORJAUS 1: Tarkistetaan, että arvot eivät ole undefined ennen sijoittamista
+            if(data.x !== undefined) p.x = data.x; 
+            if(data.y !== undefined) p.y = data.y; 
+            if(data.aim !== undefined) p.aimAngle = data.aim;
+            if(data.fr !== undefined) p.facingRight = data.fr; 
+            if(data.w !== undefined) p.weaponIndex = data.w; 
+            if(data.walk !== undefined) p.isWalking = data.walk;
+            if(data.hp !== undefined) p.hp = data.hp; 
+            if(data.kills !== undefined) p.kills = data.kills;
         }
     });
 }
@@ -1119,9 +1140,6 @@ class Bullet {
     let x=this.x, y=this.y, oid=this.ownerId;
     if(hitPlayer) playSound('hitmarker');
     
-    // KORJAUS 2: Aseen nimen hakeminen turvallisesti (WEAPON_NAMES on 1D-array)
-    let wepName = WEAPON_NAMES[this.type] || 'ASE';
-    
     if(this.type === W_HANDGUN) { jaggedCarve(x,y,5); if(hitPlayer) hitPlayer.takeDamage(20, oid); }
     else if(this.type === W_MINIGUN) { jaggedCarve(x,y,4); if(hitPlayer) hitPlayer.takeDamage(5, oid); }
     else if(this.type === W_SHOTGUN) { jaggedCarve(x,y,7); if(hitPlayer) hitPlayer.takeDamage(15, oid); }
@@ -1295,7 +1313,6 @@ class Player {
     
     c.save(); c.rotate(this.facingRight ? this.aimAngle : Math.PI - this.aimAngle);
     
-    // KORJAUS 3: Turvamekanismi aseen indeksille
     let currentWeaponSafe = this.weapons[this.weaponIndex] !== undefined ? this.weapons[this.weaponIndex] : 0;
     
     if(currentWeaponSafe === W_SHOVEL) {
@@ -1338,6 +1355,15 @@ function initGame(genNew) {
   players.push(new Player(0, sp1.x, sp1.y, PLAYER_COLORS[0], customizeSkins[0]));
   let sp2 = getCaveSpawn(false);
   players.push(new Player(1, sp2.x, sp2.y, PLAYER_COLORS[1], customizeSkins[1]));
+  
+  // TÄRKEÄ: Lähetetään pelaajien data HETI Firebaseen, jotta toisella osapuolella ei lue "NaN"!
+  if (isFirebaseReady && currentLobbyId) {
+      let me = players[myPlayerId];
+      db.ref('lobbies/' + currentLobbyId + '/p' + (myPlayerId+1)).update({
+          x: Math.floor(me.x), y: Math.floor(me.y), aim: me.aimAngle, 
+          fr: me.facingRight, w: me.weaponIndex, walk: me.isWalking, hp: me.hp, kills: me.kills
+      });
+  }
 }
 
 function updatePlaying() {
@@ -1400,13 +1426,17 @@ function drawPlaying() {
   players.forEach((p, i) => {
     let px = 20 + i * (CANVAS_W - 320); 
     ctx.fillStyle = p.color; ctx.fillText(PLAYER_NAMES[p.id] + (p.id===myPlayerId?" (YOU)":""), px, CANVAS_H - 28);
-    ctx.fillStyle = '#FFF'; ctx.fillText(`HP: ${Math.floor(p.hp)} | KILLS: ${p.kills}/${lobbyKillsToWin}`, px, CANVAS_H - 10);
+    
+    // Tarkistetaan, että arvot ovat validit tulostusta varten!
+    let hpDisp = isNaN(p.hp) ? '100' : Math.floor(p.hp);
+    let killDisp = p.kills === undefined ? '0' : p.kills;
+    
+    ctx.fillStyle = '#FFF'; ctx.fillText(`HP: ${hpDisp} | KILLS: ${killDisp}/${lobbyKillsToWin}`, px, CANVAS_H - 10);
     
     let wep = p.weapons[p.weaponIndex];
     let ammo = p.ammos[p.weaponIndex];
     let rt = p.reloadTimers[p.weaponIndex];
     
-    // KORJAUS 4: Noudetaan aseen nimi turvallisesti
     let wepName = (wep !== undefined && WEAPON_NAMES[wep]) ? WEAPON_NAMES[wep] : 'ASE';
     
     let wepText = `${wepName}: ${rt>0 ? 'RELOADING' : (wep===W_SHOVEL?'INF':ammo)}`;
@@ -1476,12 +1506,10 @@ function gameLoop(timestamp) {
           
           ctx.font = "30px 'VT323', monospace";
           
-          // Player 1 (HOST)
           ctx.fillStyle = PLAYER_COLORS[0];
           let p1Ready = currentLobbyData.p1 && currentLobbyData.p1.ready;
           ctx.fillText(`${PLAYER_NAMES[0]} - ${p1Ready ? t('READY') : t('NOT_READY')}`, CANVAS_W/2, 120);
           
-          // Player 2 (JOIN)
           ctx.fillStyle = PLAYER_COLORS[1];
           if(currentLobbyData.p2) {
               let p2Ready = currentLobbyData.p2.ready;
