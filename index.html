@@ -117,11 +117,10 @@
 
 <script>
 /* ================================================================
-   PUNKKIPELI MASSIVE ENGINE v15 ONLINE - © Eeli Noronen 2026
+   PUNKKIPELI MASSIVE ENGINE v16 ONLINE - © Eeli Noronen 2026
    - Full Firebase Multiplayer (Host/Join) with Gamepad HTML UI
    - Multiplayer Lobby with Ready Up (Triangle), Player Counts, Dings
-   - Realtime physics sync, Player DC handling
-   - Advanced Gore, Seeded Terrain, Micro-jump fix, 60 FPS, More Weapons
+   - Lobby Leave & Host Refresh Fixes!
    ================================================================ */
 
 // --- YLEISET APUFUNKTIOT ---
@@ -254,20 +253,41 @@ let pingMs = 0;
 let onlineCount = 0;
 
 // MULTIPLAYER VARS
-let myPlayerId = 0; // 0 = Host, 1 = Client
+let myPlayerId = 0; 
 let currentLobbyId = null;
 let lobbyKillsToWin = 5;
 let isHost = false;
 let mpSyncTimer = 0;
 let lastPingTime = 0;
-let latencyPing = 0; // Menu ping proxy
+let latencyPing = 0; 
 
 let currentLobbyData = null;
 let hasP2Joined = false;
 let amIReady = false;
 
-// ENNEN KUIN 6 ASETA, NYT 10 ASETA! 
-// Minigun, Shotgun, Dynamite, Shovel, Bazooka, Grenade, Sniper, Flamethrower, Boomerang, Imploder
+// KORJAUS 1: startFadeToGame funktio määritellään täällä ylhäällä, ettei se jää jumiin hoisting-ongelmaan!
+function startFadeToGame(genNew){
+  if (gameState === STATE_FADING || gameState === STATE_LOADING) return;
+  gameState=STATE_FADING; fadeAlpha=0;
+  const fi=setInterval(()=>{
+    fadeAlpha+=0.05;
+    if(fadeAlpha>=1.0){
+      clearInterval(fi); gameState=STATE_LOADING;
+      setTimeout(()=>{
+        initGame(genNew);
+        const fi2=setInterval(()=>{
+          fadeAlpha-=0.05;
+          if(fadeAlpha<=0){
+            clearInterval(fi2); gameState=STATE_COUNTDOWN;
+            countdownValue=3;countdownTimer=60; playSound('spawn');
+            listenToEvents(); startListeningToRemote(); startGameMusic();
+          }
+        },30);
+      },50);
+    }
+  },30);
+}
+
 let wsLoadouts=Array(2).fill().map(()=>[1, 8, 13, 3, 4, 2, 6, 9, 19, 20]); 
 let activeGamepadIndices=[0, 1]; 
 const PLAYER_NAMES=['Pelaaja 1 (HOST)','Pelaaja 2 (JOIN)'];
@@ -500,23 +520,24 @@ function createLobby(name, kills) {
     RNG_SEED = Math.floor(Math.random() * 1000000);
     hasP2Joined = false; amIReady = false;
     
-    db.ref('lobbies/' + currentLobbyId).set({
+    let lobbyRef = db.ref('lobbies/' + currentLobbyId);
+    
+    // KORJAUS 3: Host disconnect -> Poistaa lobbyn!
+    lobbyRef.onDisconnect().remove();
+    
+    lobbyRef.set({
         name: name, killsToWin: kills, mapSeed: RNG_SEED, state: 'waiting', ping: latencyPing,
         p1: { ready: false }, p2: null, left: false
     });
     
-    // Kuunnellaan Lobbyn muutoksia
-    db.ref('lobbies/' + currentLobbyId).on('value', snap => {
+    lobbyRef.on('value', snap => {
         currentLobbyData = snap.val();
         if(!currentLobbyData) return;
         
-        // DING ääni, kun P2 liittyy
         if(!hasP2Joined && currentLobbyData.p2) {
-            hasP2Joined = true;
-            playSound('ding');
+            hasP2Joined = true; playSound('ding');
         }
 
-        // Hostin tehtävä on käynnistää peli, kun MOLEMMAT ovat valmiita
         if(isHost && currentLobbyData.state === 'waiting' && currentLobbyData.p1 && currentLobbyData.p1.ready && currentLobbyData.p2 && currentLobbyData.p2.ready) {
             db.ref('lobbies/' + currentLobbyId + '/state').set('loading');
         }
@@ -525,8 +546,7 @@ function createLobby(name, kills) {
             startFadeToGame(true);
         }
         
-        // Pelaaja poistui
-        if(currentLobbyData.left === true && (gameState === STATE_PLAYING || gameState === STATE_LOBBY_WAIT)) disconnectGame();
+        if(currentLobbyData.left === true && (gameState === STATE_PLAYING || gameState === STATE_LOBBY_WAIT || gameState === STATE_PAUSED)) disconnectGame();
     });
 
     gameState = STATE_LOBBY_WAIT; uiMode = 'NONE';
@@ -537,25 +557,30 @@ function joinLobby(lobbyId) {
     if(!isFirebaseReady) return;
     currentLobbyId = lobbyId; isHost = false; myPlayerId = 1; amIReady = false;
     
-    db.ref('lobbies/' + currentLobbyId).once('value', snap => {
+    let lobbyRef = db.ref('lobbies/' + currentLobbyId);
+    
+    lobbyRef.once('value', snap => {
         const data = snap.val();
         if(data && data.state === 'waiting') {
             lobbyKillsToWin = data.killsToWin;
             RNG_SEED = data.mapSeed;
-            db.ref('lobbies/' + currentLobbyId + '/p2').set({ready: false});
             
-            db.ref('lobbies/' + currentLobbyId).on('value', snap => {
+            lobbyRef.child('left').onDisconnect().set(true);
+            lobbyRef.child('p2').set({ready: false});
+            
+            lobbyRef.on('value', snap => {
                 currentLobbyData = snap.val();
                 if(!currentLobbyData) return;
                 
                 if(currentLobbyData.state === 'loading' && gameState === STATE_LOBBY_WAIT) {
                     startFadeToGame(true);
                 }
-                if(currentLobbyData.left === true && (gameState === STATE_PLAYING || gameState === STATE_LOBBY_WAIT)) disconnectGame();
+                if(currentLobbyData.left === true && (gameState === STATE_PLAYING || gameState === STATE_LOBBY_WAIT || gameState === STATE_PAUSED)) disconnectGame();
             });
 
             uiMode = 'NONE'; document.getElementById('joinUI').style.display = 'none';
             gameState = STATE_LOBBY_WAIT;
+            lastInputTime = Date.now();
         } else {
             alert("Lobby on täynnä tai poistettu!");
             document.getElementById('joinUI').style.display = 'none';
@@ -587,8 +612,11 @@ function fetchLobbies() {
 
 function leaveGame() {
     if(currentLobbyId && isFirebaseReady) {
-        db.ref('lobbies/' + currentLobbyId + '/left').set(true);
-        db.ref('lobbies/' + currentLobbyId).remove();
+        if(isHost) {
+            db.ref('lobbies/' + currentLobbyId).remove();
+        } else {
+            db.ref('lobbies/' + currentLobbyId + '/left').set(true);
+        }
     }
     disconnectGame();
 }
@@ -715,7 +743,6 @@ function handleMenuInput(){
 
   if(fsPress) { toggleFullscreen(); playSound('click'); lastInputTime=now+200; }
 
-  // Jos ollaan UI moodissa, käsittele DOM navigointi
   if(uiMode !== 'NONE') {
       if(navUp||navDown||navLeft||navRight||select||back) {
           handleUINav(navUp, navDown, navLeft, navRight, select, back);
@@ -772,10 +799,15 @@ function handleMenuInput(){
   }
   else if(gameState===STATE_LOBBY_WAIT) {
       let toggleReady = false;
+      let leaveLobby = false; // KORJAUS 4: Nappi poistumiselle!
+      
       if(keys.KeyR && now - lastInputTime > 250) toggleReady = true;
+      if(keys.Escape && now - lastInputTime > 250) leaveLobby = true;
+      
       for(let i=0; i<gamepads.length; i++) {
           const gp = gamepads[i]; if(!gp || !gp.connected) continue;
           if(gpIs(gp, 'TRIANGLE') && now - lastInputTime > 250) toggleReady = true;
+          if(gpIs(gp, 'BACK') && now - lastInputTime > 250) leaveLobby = true;
       }
 
       if(toggleReady && currentLobbyId && currentLobbyData) {
@@ -785,7 +817,8 @@ function handleMenuInput(){
           lastInputTime = now;
       }
       
-      if(back) {
+      if(leaveLobby || back) {
+         playSound('click');
          leaveGame();
          lastInputTime = now;
       }
@@ -807,28 +840,6 @@ function handleMenuInput(){
   
   if(moved)playSound('hover');
   if(moved||select||back||navLeft||navRight||navUp||navDown)lastInputTime=now;
-}
-
-function startFadeToGame(genNew){
-  if (gameState === STATE_FADING || gameState === STATE_LOADING) return;
-  gameState=STATE_FADING; fadeAlpha=0;
-  const fi=setInterval(()=>{
-    fadeAlpha+=0.05;
-    if(fadeAlpha>=1.0){
-      clearInterval(fi); gameState=STATE_LOADING;
-      setTimeout(()=>{
-        initGame(genNew);
-        const fi2=setInterval(()=>{
-          fadeAlpha-=0.05;
-          if(fadeAlpha<=0){
-            clearInterval(fi2); gameState=STATE_COUNTDOWN;
-            countdownValue=3;countdownTimer=60; playSound('spawn');
-            listenToEvents(); startListeningToRemote(); startGameMusic();
-          }
-        },30);
-      },50);
-    }
-  },30);
 }
 
 // ─── TERRAIN SYSTEM & GENERATION ───
@@ -1431,7 +1442,7 @@ function gameLoop(timestamp) {
     ctx.textAlign = 'left';
   } 
   else if (gameState === STATE_LOBBY_WAIT) {
-      handleMenuInput(); // Input valmiudelle ja takaisin painamiselle
+      handleMenuInput();
       ctx.fillStyle = '#1a0f06'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
       ctx.fillStyle = '#FFD700'; ctx.font = "40px 'VT323', monospace"; ctx.textAlign = 'center';
       
@@ -1440,12 +1451,12 @@ function gameLoop(timestamp) {
           
           ctx.font = "30px 'VT323', monospace";
           
-          // Player 1
+          // Player 1 (HOST)
           ctx.fillStyle = PLAYER_COLORS[0];
           let p1Ready = currentLobbyData.p1 && currentLobbyData.p1.ready;
           ctx.fillText(`${PLAYER_NAMES[0]} - ${p1Ready ? t('READY') : t('NOT_READY')}`, CANVAS_W/2, 120);
           
-          // Player 2
+          // Player 2 (JOIN)
           ctx.fillStyle = PLAYER_COLORS[1];
           if(currentLobbyData.p2) {
               let p2Ready = currentLobbyData.p2.ready;
@@ -1455,11 +1466,10 @@ function gameLoop(timestamp) {
               ctx.fillText(t('WAITING_P2'), CANVAS_W/2, 170);
           }
           
-          // Ohjeet
           ctx.fillStyle = '#FFF';
           ctx.fillText(t('PRESS_READY'), CANVAS_W/2, 250);
           ctx.font = "20px 'VT323', monospace";
-          ctx.fillText("O = BACK / LEAVE", CANVAS_W/2, 280);
+          ctx.fillText("O / ESC = BACK / LEAVE", CANVAS_W/2, 280);
 
       } else {
           ctx.fillText(t('WAITING'), CANVAS_W/2, CANVAS_H/2);
