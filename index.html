@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Liero HTML5 Clone</title>
+    <title>Punkkipeli</title>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         * {
@@ -14,42 +14,67 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #111;
+            background-color: #000;
             color: #fff;
             font-family: 'VT323', monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
-            height: 100vh;
+            justify-content: center;
+            min-height: 100vh;
             overflow: hidden;
             touch-action: none;
         }
+        #top-bar {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 10;
+        }
+        #btn-fullscreen {
+            background: #222;
+            border: 2px solid #fff;
+            color: #fff;
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            padding: 5px 15px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        #btn-fullscreen:active {
+            background: #555;
+        }
         #game-container {
-            margin-top: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
+            width: 100%;
         }
         canvas {
-            width: 100%;
-            max-width: 640px; /* Scale up 2x for visibility */
-            height: auto;
-            aspect-ratio: 320 / 200;
+            width: 1280px; /* 4x scale */
+            height: 800px;
+            max-width: 95vw;
+            max-height: 70vh;
+            object-fit: contain;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            background-color: #3B83BD; /* Sky */
-            box-shadow: 0 0 10px #000;
+            background-color: #3B83BD;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
         }
         #ui-bar {
-            width: 100%;
-            max-width: 640px;
+            width: 1280px;
+            max-width: 95vw;
             background-color: #000;
-            border: 2px solid #555;
+            border: 2px solid #fff;
+            border-top: none;
             padding: 5px 10px;
             display: flex;
             justify-content: space-between;
-            font-size: 20px;
-            color: #0f0;
+            font-size: 24px;
+            color: #fff; /* Changed to white */
             text-transform: uppercase;
         }
         .ui-element {
@@ -57,7 +82,7 @@
             align-items: center;
         }
         .reloading {
-            color: #f00;
+            color: #f00 !important;
             animation: blink 0.5s infinite;
         }
         @keyframes blink {
@@ -71,10 +96,36 @@
             flex-grow: 1;
             position: relative;
             margin-top: 10px;
+            display: none; /* Hidden by default, shown if touch is used */
         }
+        @media (pointer: coarse) {
+            #mobile-controls {
+                display: block;
+            }
+        }
+        /* Enforce Vertical Mode (Portrait) */
+        #orientation-lock {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #000;
+            color: #fff;
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            text-align: center;
+            padding: 20px;
+        }
+        @media screen and (orientation: landscape) and (max-height: 600px) {
+            #orientation-lock { display: flex; }
+            #game-container, #mobile-controls, #top-bar { display: none !important; }
+        }
+
         .btn {
             position: absolute;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
             border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
             color: white;
@@ -85,23 +136,26 @@
             align-items: center;
             text-align: center;
         }
-        .btn:active {
-            background: rgba(255, 255, 255, 0.5);
-        }
-        /* D-PAD */
-        #dpad { position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; }
+        .btn:active { background: rgba(255, 255, 255, 0.4); }
+        #dpad { position: absolute; bottom: 10px; left: 10px; width: 120px; height: 120px; }
         #btn-up { top: 0; left: 40px; width: 40px; height: 40px; }
         #btn-down { bottom: 0; left: 40px; width: 40px; height: 40px; }
         #btn-left { top: 40px; left: 0; width: 40px; height: 40px; }
         #btn-right { top: 40px; right: 0; width: 40px; height: 40px; }
-        
-        /* Action Buttons */
-        #btn-jump { bottom: 80px; right: 20px; width: 50px; height: 50px; }
-        #btn-use { bottom: 20px; right: 80px; width: 60px; height: 60px; }
-        #btn-swap { bottom: 90px; right: 90px; width: 40px; height: 40px; font-size: 14px; }
+        #btn-jump { bottom: 70px; right: 10px; width: 50px; height: 50px; }
+        #btn-use { bottom: 10px; right: 70px; width: 60px; height: 60px; }
+        #btn-swap { bottom: 80px; right: 80px; width: 40px; height: 40px; font-size: 14px; }
     </style>
 </head>
 <body>
+
+<div id="orientation-lock">
+    PLEASE ROTATE YOUR DEVICE TO VERTICAL (PORTRAIT) MODE TO PLAY.
+</div>
+
+<div id="top-bar">
+    <button id="btn-fullscreen">Toggle Fullscreen</button>
+</div>
 
 <div id="game-container">
     <canvas id="gameCanvas" width="320" height="200"></canvas>
@@ -125,25 +179,71 @@
 </div>
 
 <script>
-// --- AUDIO SYSTEM (Web Audio API) ---
+// --- FULLSCREEN LOGIC ---
+const fullscreenBtn = document.getElementById('btn-fullscreen');
+fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock("portrait").catch(console.error);
+            }
+        }).catch(err => {
+            console.log(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+});
+
+// --- AUDIO SYSTEM (Upgraded) ---
 let audioCtx = null;
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 function playShootSound() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
+    const noise = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    
+    // Tone
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+    
+    // Noise (Punchy shot)
+    const bufferSize = audioCtx.sampleRate * 0.15;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buffer;
+
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    
+    osc.connect(gain);
+    noise.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    noise.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playShovelSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+    osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
@@ -151,35 +251,13 @@ function playShootSound() {
     osc.stop(audioCtx.currentTime + 0.1);
 }
 
-function playShovelSound() {
-    if (!audioCtx) return;
-    const bufferSize = audioCtx.sampleRate * 0.1; 
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-    }
-    const noise = audioCtx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 800;
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(audioCtx.destination);
-    noise.start();
-}
-
 function playReloadSound() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-    osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
     gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
     gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
     osc.connect(gain);
@@ -194,10 +272,16 @@ const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const WIDTH = 320;
 const HEIGHT = 200;
 
-// Input State
+// Input States (Keyboard + Touch)
 const keys = {
     up: false, down: false, left: false, right: false,
     jump: false, use: false, swap: false
+};
+
+const gpState = {
+    jump: false, use: false, swap: false,
+    moveLeft: false, moveRight: false,
+    aimActive: false, aimAngle: 0
 };
 
 // UI Elements
@@ -205,20 +289,21 @@ const uiHp = document.getElementById('ui-hp');
 const uiWep = document.getElementById('ui-wep');
 const uiAmmo = document.getElementById('ui-ammo');
 
-// Terrain data (0 = empty, 1 = dirt)
+// Terrain data
 const terrain = new Uint8Array(WIDTH * HEIGHT);
 const terrainImageData = ctx.createImageData(WIDTH, HEIGHT);
 
 // Colors
 const COLOR_SKY = [59, 131, 189, 255];
-const COLOR_DIRT = [90, 58, 34, 255];
+const COLOR_DIRT = [80, 50, 25, 255]; // Solid dark dirt
+const COLOR_DIRT_DETAIL = [65, 38, 18, 255]; // Slightly darker for subtle texture
 
 function initTerrain() {
     for (let y = 0; y < HEIGHT; y++) {
         for (let x = 0; x < WIDTH; x++) {
             const idx = y * WIDTH + x;
-            // Spawn area: top 60 pixels are sky, rest is dirt with some noise
-            if (y > 60 && Math.random() > 0.05) {
+            // Top 60px sky, rest solid soil (no random gaps)
+            if (y > 60) {
                 terrain[idx] = 1;
             } else {
                 terrain[idx] = 0;
@@ -232,10 +317,12 @@ function updateTerrainPixelBuffer(x, y, type) {
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
     const idx = (y * WIDTH + x) * 4;
     if (type === 1) {
-        terrainImageData.data[idx] = COLOR_DIRT[0];
-        terrainImageData.data[idx+1] = COLOR_DIRT[1];
-        terrainImageData.data[idx+2] = COLOR_DIRT[2];
-        terrainImageData.data[idx+3] = COLOR_DIRT[3];
+        // Subtle checkerboard/noise detail so it's not perfectly flat but has NO empty spaces
+        const isDetail = (x % 2 === 0 && y % 2 !== 0) || (x % 3 === 0);
+        terrainImageData.data[idx] = isDetail ? COLOR_DIRT_DETAIL[0] : COLOR_DIRT[0];
+        terrainImageData.data[idx+1] = isDetail ? COLOR_DIRT_DETAIL[1] : COLOR_DIRT[1];
+        terrainImageData.data[idx+2] = isDetail ? COLOR_DIRT_DETAIL[2] : COLOR_DIRT[2];
+        terrainImageData.data[idx+3] = 255;
     } else {
         terrainImageData.data[idx] = COLOR_SKY[0];
         terrainImageData.data[idx+1] = COLOR_SKY[1];
@@ -249,12 +336,19 @@ function digCircle(cx, cy, radius) {
     cy = Math.floor(cy);
     for (let y = -radius; y <= radius; y++) {
         for (let x = -radius; x <= radius; x++) {
-            if (x*x + y*y <= radius*radius) {
+            // Smoother circle math
+            if (x*x + y*y <= radius*radius + 0.5) {
                 const px = cx + x;
                 const py = cy + y;
                 if (px >= 0 && px < WIDTH && py >= 0 && py < HEIGHT) {
-                    terrain[py * WIDTH + px] = 0;
-                    updateTerrainPixelBuffer(px, py, 0);
+                    if (terrain[py * WIDTH + px] === 1) {
+                        terrain[py * WIDTH + px] = 0;
+                        updateTerrainPixelBuffer(px, py, 0);
+                        // Spawn breaking physics particles randomly
+                        if (Math.random() < 0.2) {
+                            particles.push(new Particle(px, py, (Math.random()-0.5)*2, (Math.random()-1)*2));
+                        }
+                    }
                 }
             }
         }
@@ -264,18 +358,40 @@ function digCircle(cx, cy, radius) {
 function isSolid(x, y) {
     x = Math.floor(x);
     y = Math.floor(y);
-    if (x < 0 || x >= WIDTH || y >= HEIGHT) return true; // Boundaries are solid
+    if (x < 0 || x >= WIDTH || y >= HEIGHT) return true;
     if (y < 0) return false;
     return terrain[y * WIDTH + x] === 1;
 }
 
 // --- WEAPONS ---
 const WEAPONS = [
-    { name: "MINIGUN", maxAmmo: 100, reloadTime: 120, fireRate: 3, isMelee: false },
-    { name: "SHOVEL", maxAmmo: Infinity, reloadTime: 0, fireRate: 15, isMelee: true }
+    { name: "MINIGUN", maxAmmo: 100, reloadTime: 90, fireRate: 3, isMelee: false },
+    { name: "SHOVEL", maxAmmo: Infinity, reloadTime: 0, fireRate: 12, isMelee: true }
 ];
 
 // --- ENTITIES ---
+class Particle {
+    constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = 20 + Math.random() * 20;
+    }
+    update() {
+        this.vy += 0.2; // Gravity
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life--;
+    }
+    draw(ctx) {
+        if (this.life > 0) {
+            ctx.fillStyle = "#412612"; // Dirt particle color
+            ctx.fillRect(Math.floor(this.x), Math.floor(this.y), 1, 1);
+        }
+    }
+}
+
 class Player {
     constructor(x, y) {
         this.x = x;
@@ -304,40 +420,63 @@ class Player {
     update() {
         if (this.hp <= 0) return;
 
-        // Aiming
-        if (keys.up) this.aimAngle -= 0.05;
-        if (keys.down) this.aimAngle += 0.05;
-        // Clamp aim angle
-        if (this.aimAngle < -Math.PI/2.5) this.aimAngle = -Math.PI/2.5;
-        if (this.aimAngle > Math.PI/2.5) this.aimAngle = Math.PI/2.5;
+        // Resolve inputs (Gamepad takes priority, then Keyboard/Touch)
+        const moveLeft = gpState.moveLeft || keys.left;
+        const moveRight = gpState.moveRight || keys.right;
+        const jump = gpState.jump || keys.jump;
+        const use = gpState.use || keys.use;
+        const swap = gpState.swap || keys.swap;
+
+        // Aiming (Gamepad Left Stick absolute vs Keyboard D-Pad relative)
+        if (gpState.aimActive) {
+            this.aimAngle = gpState.aimAngle;
+            // Update facing based on aim stick horizontal axis
+            if (Math.abs(this.aimAngle) > Math.PI/2) {
+                this.facingRight = false;
+                // Normalize angle for sprite drawing logic
+                if (this.aimAngle > 0) this.aimAngle = Math.PI - this.aimAngle;
+                else this.aimAngle = -Math.PI - this.aimAngle;
+            } else {
+                this.facingRight = true;
+            }
+        } else {
+            if (keys.up) this.aimAngle -= 0.08;
+            if (keys.down) this.aimAngle += 0.08;
+        }
+        
+        // Clamp aim angle for drawing logic
+        if (this.aimAngle < -Math.PI/2.2) this.aimAngle = -Math.PI/2.2;
+        if (this.aimAngle > Math.PI/2.2) this.aimAngle = Math.PI/2.2;
 
         // Movement
         this.isWalking = false;
-        if (keys.left) {
-            this.vx = -1;
-            this.facingRight = false;
+        if (moveLeft) {
+            this.vx = -1.2;
+            if (!gpState.aimActive) this.facingRight = false;
             this.isWalking = true;
-        } else if (keys.right) {
-            this.vx = 1;
-            this.facingRight = true;
+        } else if (moveRight) {
+            this.vx = 1.2;
+            if (!gpState.aimActive) this.facingRight = true;
             this.isWalking = true;
         } else {
-            this.vx = 0;
+            this.vx *= 0.5; // Friction
         }
 
         // Jumping
-        if (keys.jump && this.onGround) {
-            this.vy = -3.5;
+        if (jump && this.onGround) {
+            this.vy = -3.8;
             this.onGround = false;
         }
 
         // Gravity
-        this.vy += 0.15;
+        this.vy += 0.18;
         if (this.vy > 5) this.vy = 5;
 
         // Collision X
         if (!isSolid(this.x + this.vx + (this.vx > 0 ? this.width/2 : -this.width/2), this.y)) {
             this.x += this.vx;
+        } else {
+            this.vx = 0;
         }
 
         // Collision Y
@@ -360,7 +499,7 @@ class Player {
 
         // Weapon Swapping
         if (this.swapCooldown > 0) this.swapCooldown--;
-        if (keys.swap && this.swapCooldown === 0) {
+        if (swap && this.swapCooldown === 0) {
             this.weaponIndex = (this.weaponIndex + 1) % WEAPONS.length;
             this.ammo = WEAPONS[this.weaponIndex].maxAmmo;
             this.reloadTimer = 0;
@@ -377,30 +516,32 @@ class Player {
             if (this.reloadTimer === 0) {
                 this.ammo = currentWeapon.maxAmmo;
             }
-        } else if (keys.use && this.fireCooldown === 0) {
+        } else if (use && this.fireCooldown === 0) {
             initAudio();
+            const actualAimAngle = this.facingRight ? this.aimAngle : Math.PI - this.aimAngle;
+            
             if (currentWeapon.isMelee) { // Shovel
-                const reachX = this.x + (this.facingRight ? 1 : -1) * Math.cos(this.aimAngle) * 8;
-                const reachY = this.y + Math.sin(this.aimAngle) * 8;
-                digCircle(reachX, reachY, 6);
+                const reachX = this.x + Math.cos(actualAimAngle) * 10;
+                const reachY = this.y + Math.sin(actualAimAngle) * 10;
+                digCircle(reachX, reachY, 7); // Bigger scoop
                 playShovelSound();
                 this.fireCooldown = currentWeapon.fireRate;
             } else { // Minigun
                 if (this.ammo > 0) {
                     this.ammo--;
-                    const dirX = (this.facingRight ? 1 : -1) * Math.cos(this.aimAngle);
-                    const dirY = Math.sin(this.aimAngle);
+                    const dirX = Math.cos(actualAimAngle);
+                    const dirY = Math.sin(actualAimAngle);
                     
-                    // Add slight spread
-                    const spread = (Math.random() - 0.5) * 0.1;
+                    const spread = (Math.random() - 0.5) * 0.15;
                     const finalDirX = dirX * Math.cos(spread) - dirY * Math.sin(spread);
                     const finalDirY = dirX * Math.sin(spread) + dirY * Math.cos(spread);
 
-                    bullets.push(new Bullet(this.x + dirX*5, this.y + dirY*5, finalDirX * 6, finalDirY * 6));
+                    bullets.push(new Bullet(this.x + dirX*6, this.y + dirY*6, finalDirX * 7, finalDirY * 7));
                     playShootSound();
                     
-                    // Recoil
-                    this.vx -= dirX * 0.5;
+                    // Increased Recoil
+                    this.vx -= dirX * 1.5; 
+                    this.vy -= dirY * 0.5;
                     this.fireCooldown = currentWeapon.fireRate;
                 } else {
                     this.reloadTimer = currentWeapon.reloadTime;
@@ -421,20 +562,21 @@ class Player {
         ctx.translate(Math.floor(this.x), Math.floor(this.y));
         if (!this.facingRight) ctx.scale(-1, 1);
 
-        // Draw Worm Sprite
-        ctx.fillStyle = "#FF99AA"; // Worm skin color
-        
-        // Body (Animate walking)
+        // Animation bounce
         let bounce = 0;
         if (this.isWalking && this.onGround) {
-            bounce = (Math.floor(this.animTimer / 5) % 2) === 0 ? -1 : 0;
+            bounce = (Math.floor(this.animTimer / 4) % 2) === 0 ? -1 : 0;
         } else if (!this.onGround) {
-            bounce = -1; // Jump pose
+            bounce = -1;
         }
 
-        // Main body rect
+        // Helmet / Head detail
+        ctx.fillStyle = "#333";
+        ctx.fillRect(-3, -4 + bounce, 6, 2);
+        
+        // Body (Worm skin)
+        ctx.fillStyle = "#FF99AA";
         ctx.fillRect(-3, -2 + bounce, 6, 5);
-        ctx.fillRect(-2, -3 + bounce, 4, 1); // Head
         
         // Eye
         ctx.fillStyle = "#000";
@@ -442,16 +584,29 @@ class Player {
 
         // Weapon
         ctx.rotate(this.aimAngle);
-        if (this.weaponIndex === 0) { // Minigun
-            ctx.fillStyle = "#555";
-            ctx.fillRect(2, bounce, 6, 2);
+        if (this.weaponIndex === 0) { // Detailed Minigun
+            ctx.fillStyle = "#444";
+            ctx.fillRect(2, bounce, 8, 3); // Gun Body
             ctx.fillStyle = "#222";
-            ctx.fillRect(8, bounce, 2, 2); // Barrel
-        } else { // Shovel
-            ctx.fillStyle = "#8B4513"; // Wood handle
-            ctx.fillRect(2, bounce, 6, 1);
-            ctx.fillStyle = "#AAA"; // Metal head
-            ctx.fillRect(8, bounce - 1, 2, 3);
+            ctx.fillRect(10, bounce, 4, 1); // Barrel 1
+            ctx.fillRect(10, bounce + 2, 4, 1); // Barrel 2
+            // Muzzle flash if firing
+            if (gpState.use || keys.use) {
+                if (Math.random() > 0.5 && this.ammo > 0 && this.reloadTimer === 0) {
+                    ctx.fillStyle = "#FFAA00";
+                    ctx.fillRect(14, bounce, 3, 3);
+                }
+            }
+        } else { // Detailed Shovel
+            ctx.fillStyle = "#5c3a21"; // Wood handle
+            ctx.fillRect(2, bounce, 8, 1);
+            ctx.fillStyle = "#bdc3c7"; // Metal head
+            ctx.beginPath();
+            ctx.moveTo(10, bounce - 2);
+            ctx.lineTo(13, bounce - 2);
+            ctx.lineTo(14, bounce + 1);
+            ctx.lineTo(10, bounce + 1);
+            ctx.fill();
         }
         
         ctx.restore();
@@ -469,20 +624,17 @@ class Bullet {
 
     update() {
         if (!this.active) return;
-        
         this.vy += 0.05; // bullet drop
         this.x += this.vx;
         this.y += this.vy;
 
-        // Out of bounds
         if (this.x < 0 || this.x >= WIDTH || this.y >= HEIGHT) {
             this.active = false;
             return;
         }
 
-        // Hit terrain
         if (isSolid(this.x, this.y)) {
-            digCircle(this.x, this.y, 2); // Small destruction
+            digCircle(this.x, this.y, 3); // Bullet explosion hole
             this.active = false;
         }
     }
@@ -491,30 +643,64 @@ class Bullet {
         if (!this.active) return;
         ctx.fillStyle = "#FFDD00";
         ctx.fillRect(Math.floor(this.x), Math.floor(this.y), 2, 2);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(Math.floor(this.x)+1, Math.floor(this.y), 1, 1);
     }
 }
 
 // --- GLOBAL VARIABLES ---
 let player;
 let bullets = [];
+let particles = [];
 
 // --- INITIALIZATION ---
 function init() {
     initTerrain();
-    // Spawn player at top center where there is no soil
     player = new Player(WIDTH / 2, 20);
     requestAnimationFrame(gameLoop);
 }
 
+// --- GAMEPAD API POLLING ---
+function pollGamepad() {
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    if (!gamepads || !gamepads[0]) return;
+    
+    const gp = gamepads[0];
+    
+    // Buttons based on Standard DualSense Mapping
+    gpState.jump = gp.buttons[0]?.pressed || false; // X button
+    gpState.swap = gp.buttons[6]?.pressed || gp.buttons[6]?.value > 0.5 || false; // L2
+    gpState.use = gp.buttons[7]?.pressed || gp.buttons[7]?.value > 0.5 || false; // R2
+    
+    // Right Joystick (Axes 2, 3) - Move
+    const rightStickX = gp.axes[2] || 0;
+    gpState.moveLeft = rightStickX < -0.3;
+    gpState.moveRight = rightStickX > 0.3;
+
+    // Left Joystick (Axes 0, 1) - Aim
+    const leftStickX = gp.axes[0] || 0;
+    const leftStickY = gp.axes[1] || 0;
+    
+    if (Math.abs(leftStickX) > 0.2 || Math.abs(leftStickY) > 0.2) {
+        gpState.aimActive = true;
+        gpState.aimAngle = Math.atan2(leftStickY, leftStickX);
+    } else {
+        gpState.aimActive = false;
+    }
+}
+
 // --- UPDATE & RENDER LOOP ---
 function update() {
+    pollGamepad();
     player.update();
     
     for (let i = bullets.length - 1; i >= 0; i--) {
         bullets[i].update();
-        if (!bullets[i].active) {
-            bullets.splice(i, 1);
-        }
+        if (!bullets[i].active) bullets.splice(i, 1);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) particles.splice(i, 1);
     }
 
     // Update UI
@@ -532,13 +718,11 @@ function update() {
 }
 
 function draw() {
-    // Draw destructible terrain via ImageData
     ctx.putImageData(terrainImageData, 0, 0);
 
-    // Draw Entities
-    for (let b of bullets) {
-        b.draw(ctx);
-    }
+    for (let p of particles) p.draw(ctx);
+    for (let b of bullets) b.draw(ctx);
+    
     player.draw(ctx);
 }
 
@@ -548,9 +732,7 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// --- INPUT HANDLING ---
-
-// Keyboard
+// --- INPUT HANDLING (Keyboard & Touch) ---
 window.addEventListener('keydown', (e) => {
     switch(e.code) {
         case 'KeyW': case 'ArrowUp': keys.up = true; break;
@@ -574,12 +756,12 @@ window.addEventListener('keyup', (e) => {
     }
 });
 
-// Mobile Touch Controls
 function bindTouch(btnId, keyName) {
     const btn = document.getElementById(btnId);
+    if(!btn) return;
     btn.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        initAudio(); // Required to unlock Web Audio on iOS/Android
+        initAudio();
         keys[keyName] = true;
     });
     btn.addEventListener('touchend', (e) => {
@@ -587,16 +769,11 @@ function bindTouch(btnId, keyName) {
         keys[keyName] = false;
     });
 }
-
-bindTouch('btn-up', 'up');
-bindTouch('btn-down', 'down');
-bindTouch('btn-left', 'left');
-bindTouch('btn-right', 'right');
-bindTouch('btn-jump', 'jump');
-bindTouch('btn-use', 'use');
+bindTouch('btn-up', 'up'); bindTouch('btn-down', 'down');
+bindTouch('btn-left', 'left'); bindTouch('btn-right', 'right');
+bindTouch('btn-jump', 'jump'); bindTouch('btn-use', 'use');
 bindTouch('btn-swap', 'swap');
 
-// Start Game
 init();
 
 </script>
