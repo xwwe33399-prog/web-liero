@@ -122,6 +122,7 @@
    - Multiplayer Lobby with Ready Up (Triangle), Player Counts, Dings
    - Fixed Skin loading error (Everyone uses Oikotiemies)
    - Proper Loading Screen implementation
+   - Fixed buildPlayerSprites reference error!
    ================================================================ */
 
 // --- YLEISET APUFUNKTIOT ---
@@ -141,7 +142,7 @@ const firebaseConfig = {
 
 let db = null;
 let isFirebaseReady = false;
-if (firebaseConfig.apiKey !== "PASTE_HERE" && firebaseConfig.apiKey !== "") {
+if (firebaseConfig.apiKey !== "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A" && firebaseConfig.apiKey !== "") {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
     isFirebaseReady = true;
@@ -266,7 +267,6 @@ let currentLobbyData = null;
 let hasP2Joined = false;
 let amIReady = false;
 
-// KORJATTU LATAUSRUUTU
 function startFadeToGame(genNew){
   if (gameState === STATE_FADING || gameState === STATE_LOADING || gameState === STATE_COUNTDOWN) return;
   gameState=STATE_FADING; fadeAlpha=0;
@@ -274,7 +274,7 @@ function startFadeToGame(genNew){
     fadeAlpha+=0.05;
     if(fadeAlpha>=1.0){
       clearInterval(fi); 
-      gameState=STATE_LOADING; // Näyttää "LADATAAN PELIÄ..." tekstin selkeästi
+      gameState=STATE_LOADING; 
       setTimeout(()=>{
         initGame(genNew);
         const fi2=setInterval(()=>{
@@ -285,18 +285,20 @@ function startFadeToGame(genNew){
             listenToEvents(); startListeningToRemote(); startGameMusic();
           }
         },30);
-      }, 1500); // 1.5 sekunnin lataustauko, jotta peli synkronisoituu rauhassa
+      }, 1500); 
     }
   },30);
 }
 
 let wsLoadouts=Array(2).fill().map(()=>[1, 8, 13, 3, 4, 2, 6, 9, 19, 20]); 
 let activeGamepadIndices=[0, 1]; 
+let customizeSkins=[1, 1]; 
 const PLAYER_NAMES=['Pelaaja 1 (HOST)','Pelaaja 2 (JOIN)'];
 const PLAYER_COLORS=['#5599FF','#FF5555'];
 
 // ─── SPRITES ───
 const SPRITES={
+  BALL:[" 5555 "," 511115 ","51144115","51444415","51444415"," 51144115"," 511115 "," 5555 "],
   OIKOTIEMIES_STAND:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 5B55B5 "," 55 55 "],
   OIKOTIEMIES_WALK1:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 55BB55 "," 5  55 "],
   OIKOTIEMIES_WALK2:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 555BB5 "," 55 5 "],
@@ -315,6 +317,21 @@ function genSprite(rows,color){
     }
   }
   return sc;
+}
+
+// KORJAUS TÄSSÄ: Funktio palautettu omalle paikalleen!
+function buildPlayerSprites(p){
+  if(p.skinType===0){
+    p.spriteStand=genSprite(SPRITES.BALL,p.color); 
+    p.spriteWalk1=p.spriteStand; 
+    p.spriteWalk2=p.spriteStand; 
+    p.spriteJump=p.spriteStand;
+  }else{
+    p.spriteStand=genSprite(SPRITES.OIKOTIEMIES_STAND,p.color); 
+    p.spriteWalk1=genSprite(SPRITES.OIKOTIEMIES_WALK1,p.color);
+    p.spriteWalk2=genSprite(SPRITES.OIKOTIEMIES_WALK2,p.color); 
+    p.spriteJump=genSprite(SPRITES.OIKOTIEMIES_JUMP,p.color);
+  }
 }
 
 // ─── AUDIO SYSTEM & MUSIC ───
@@ -397,7 +414,6 @@ function gpIs(gp,action){
   if(!gp||!gp.connected)return false;
   const b=(i)=>gp.buttons.length>i&&gp.buttons[i].pressed;
   const ax=(i)=>gp.axes.length>i?gp.axes[i]:0;
-  
   const hat = gp.axes.length > 9 ? gp.axes[9] : 999;
   
   switch(action){
@@ -1315,9 +1331,9 @@ function initGame(genNew) {
   players = []; bullets.length=0; grenades.length=0; particles.length=0; visualExplosions.length=0;
   
   let sp1 = getCaveSpawn(true);
-  players.push(new Player(0, sp1.x, sp1.y, PLAYER_COLORS[0], 1)); // Pakotettu 1 = Oikotiemies
+  players.push(new Player(0, sp1.x, sp1.y, PLAYER_COLORS[0], customizeSkins[0]));
   let sp2 = getCaveSpawn(false);
-  players.push(new Player(1, sp2.x, sp2.y, PLAYER_COLORS[1], 1)); // Pakotettu 1 = Oikotiemies
+  players.push(new Player(1, sp2.x, sp2.y, PLAYER_COLORS[1], customizeSkins[1]));
 }
 
 function updatePlaying() {
