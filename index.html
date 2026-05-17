@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>moninpelitesti</title>
+<title>moninpelitestiv1</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -353,7 +353,6 @@ function gpIs(gp,action){
   const hat = gp.axes.length > 9 ? gp.axes[9] : 999;
   
   switch(action){
-    // Tatin deadzone laskettu 0.5 -> 0.4 herkemmän liikkeen saamiseksi
     case 'UP':return b(12) || ax(1) < -0.4 || hat === -1 || (hat > -1.1 && hat < -0.9);
     case 'DOWN':return b(13) || ax(1) > 0.4 || hat === 0.1428571492433548 || (hat > 0.1 && hat < 0.2);
     case 'LEFT':return b(14) || ax(0) < -0.4 || hat === 0.7142857313156128 || (hat > 0.7 && hat < 0.8);
@@ -1286,7 +1285,7 @@ function gameLoop(timestamp) {
     handleMenuInput();
     ctx.fillStyle = '#1a0f06'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
     ctx.fillStyle = '#FFF'; ctx.font = "50px 'VT323', monospace"; ctx.textAlign = 'center';
-    ctx.fillText(t('moninpelitesti'), CANVAS_W/2, 100);
+    ctx.fillText(t('Moninpelikakka'), CANVAS_W/2, 100);
     
     // Online Counter
     ctx.font = "20px 'VT323', monospace"; ctx.fillStyle = '#0F0';
