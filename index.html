@@ -130,22 +130,31 @@ const wrap = (v, len) => ((v % len) + len) % len;
 const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
 
 // --- LIITÄ FIREBASE CONFIGURATIOSI TÄHÄN ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A",
-  authDomain: "punkkigame.firebaseapp.com",
-  databaseURL: "https://punkkigame-default-rtdb.firebaseio.com",
-  projectId: "punkkigame",
-  storageBucket: "punkkigame.firebasestorage.app",
-  messagingSenderId: "308792827770",
-  appId: "1:308792827770:web:bf8892d9a1a89ddda8c0c3"
-};
 
+//
+FIREBASE CONFIG (Korjattu V8 formaatti)
+const firebaseConfig
+};
+=
+{
+apiKey: "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A",
+authDomain: "punkkigame.firebaseapp.com",
+databaseURL: "https://punkkigame-default-rtdb.firebaseio.com", 
+projectId: "punkkigame",
+storageBucket: "punkkigame.firebasestorage.app",
+messagingSenderId: "308792827770",
+appId: "1:308792827770: web:bf8892d9a1a89ddda8c0c3",
+measurementId: "G-CP84HGM4B1"
 let db = null;
 let isFirebaseReady = false;
-if (firebaseConfig.apiKey !== "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A" && firebaseConfig.apiKey !== "") {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    isFirebaseReady = true;
+try {
+firebase.initializeApp (firebaseConfig);
+db =
+firebase.database();
+isFirebaseReady = true;
+} catch (e) {
+console.error("Firebase init failed:",
+e);
 }
 
 // ─── FULLSCREEN LOGIC ───
