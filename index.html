@@ -24,18 +24,14 @@
     font-family: 'VT323', monospace; font-size: 20px; padding: 5px 20px; cursor: pointer;
   }
   #fsBtn:hover { background: #444; }
-  
-  /* Skaalauskorjaus tabletille */
   #gameWrapper { 
     position: relative; display: flex; justify-content: center; align-items: center; 
-    width: 100vw; height: 100vh; flex-grow: 1;
+    width: 100%; height: 100%;
   }
   #gameCanvas { 
     image-rendering: pixelated; 
-    width: 100%; height: 100%; 
-    max-width: 100%; max-height: 100%; 
-    object-fit: contain; /* Pakottaa sisällön skaalautumaan ruudun rajoihin oikeassa kuvasuhteessa */
-    background-color: #000;
+    width: 100%; height: 100%; max-width: 100vw; max-height: 100vh; object-fit: contain;
+    border: 2px solid #333; background-color: #000;
   }
   
   /* UI OVERLAYS */
@@ -78,7 +74,7 @@
     background: #000; z-index: 9999; margin: 0; padding: 0;
   }
   .css-fullscreen #gameCanvas {
-    width: 100vw; height: 100vh; border: none; max-width: none; max-height: none; object-fit: contain;
+    width: 100vw; height: 100vh; border: none; max-width: none; max-height: none; object-fit: cover;
   }
 </style>
 </head>
@@ -121,36 +117,33 @@
 
 <script>
 /* ================================================================
-   PUNKKIPELI MASSIVE ENGINE v17 ONLINE - © Eeli Noronen 2026
+   PUNKKIPELI MASSIVE ENGINE v18 ONLINE - © Eeli Noronen 2026
    - Full Firebase Multiplayer (Host/Join) with Gamepad HTML UI
-   - Firebase Connection fixed (V8 API, DB URL added)
-   - Tablet scaling fixed via object-fit contain
+   - FIXED: drawPlaying Array.forEach crash ([currentLang] removed)
+   - Proper Loading Screen implementation & safety checks
    ================================================================ */
 
 // --- YLEISET APUFUNKTIOT ---
 const wrap = (v, len) => ((v % len) + len) % len;
 const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
 
-// --- FIREBASE CONFIG (Korjattu V8 formaatti) ---
+// --- LIITÄ FIREBASE CONFIGURATIOSI TÄHÄN ---
 const firebaseConfig = {
   apiKey: "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A",
   authDomain: "punkkigame.firebaseapp.com",
-  databaseURL: "https://punkkigame-default-rtdb.firebaseio.com", // PUUTTUI AIEMMIN!
+  databaseURL: "https://punkkigame-default-rtdb.firebaseio.com",
   projectId: "punkkigame",
   storageBucket: "punkkigame.firebasestorage.app",
   messagingSenderId: "308792827770",
-  appId: "1:308792827770:web:bf8892d9a1a89ddda8c0c3",
-  measurementId: "G-CP84HGM4B1"
+  appId: "1:308792827770:web:bf8892d9a1a89ddda8c0c3"
 };
 
 let db = null;
 let isFirebaseReady = false;
-try {
+if (firebaseConfig.apiKey !== "PASTE_HERE" && firebaseConfig.apiKey !== "") {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
     isFirebaseReady = true;
-} catch (e) {
-    console.error("Firebase init failed:", e);
 }
 
 // ─── FULLSCREEN LOGIC ───
@@ -1125,6 +1118,10 @@ class Bullet {
   onHit(hitPlayer) {
     let x=this.x, y=this.y, oid=this.ownerId;
     if(hitPlayer) playSound('hitmarker');
+    
+    // KORJAUS 2: Aseen nimen hakeminen turvallisesti (WEAPON_NAMES on 1D-array)
+    let wepName = WEAPON_NAMES[this.type] || 'ASE';
+    
     if(this.type === W_HANDGUN) { jaggedCarve(x,y,5); if(hitPlayer) hitPlayer.takeDamage(20, oid); }
     else if(this.type === W_MINIGUN) { jaggedCarve(x,y,4); if(hitPlayer) hitPlayer.takeDamage(5, oid); }
     else if(this.type === W_SHOTGUN) { jaggedCarve(x,y,7); if(hitPlayer) hitPlayer.takeDamage(15, oid); }
@@ -1297,7 +1294,11 @@ class Player {
     if(!this.onGround) bounce = -1;
     
     c.save(); c.rotate(this.facingRight ? this.aimAngle : Math.PI - this.aimAngle);
-    if(this.weapons[this.weaponIndex] === W_SHOVEL) {
+    
+    // KORJAUS 3: Turvamekanismi aseen indeksille
+    let currentWeaponSafe = this.weapons[this.weaponIndex] !== undefined ? this.weapons[this.weaponIndex] : 0;
+    
+    if(currentWeaponSafe === W_SHOVEL) {
         c.fillStyle = '#8B4513'; c.fillRect(2, bounce, 6, 2);
         c.fillStyle = '#AAA'; c.fillRect(8, bounce-2, 3, 6);
     } else {
@@ -1319,7 +1320,7 @@ class Player {
     c.fillStyle = '#0F0'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-16, Math.max(0, this.hp/100*20), 2);
     
     let rt = this.reloadTimers[this.weaponIndex];
-    let maxRt = RELOAD_TIMES[this.weapons[this.weaponIndex]];
+    let maxRt = RELOAD_TIMES[currentWeaponSafe];
     if(rt > 0 && maxRt > 0) {
        c.fillStyle = '#333'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-25, 20, 3);
        c.fillStyle = '#FFEB3B'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-25, 20 * (1 - rt/maxRt), 3);
@@ -1405,7 +1406,10 @@ function drawPlaying() {
     let ammo = p.ammos[p.weaponIndex];
     let rt = p.reloadTimers[p.weaponIndex];
     
-    let wepText = `${WEAPON_NAMES[wep][currentLang]}: ${rt>0 ? 'RELOADING' : (wep===W_SHOVEL?'INF':ammo)}`;
+    // KORJAUS 4: Noudetaan aseen nimi turvallisesti
+    let wepName = (wep !== undefined && WEAPON_NAMES[wep]) ? WEAPON_NAMES[wep] : 'ASE';
+    
+    let wepText = `${wepName}: ${rt>0 ? 'RELOADING' : (wep===W_SHOVEL?'INF':ammo)}`;
     ctx.fillStyle = rt > 0 ? '#FFEB3B' : '#FFF';
     ctx.fillText(wepText, px + 150, CANVAS_H - 28);
   });
