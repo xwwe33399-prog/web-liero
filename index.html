@@ -339,7 +339,7 @@ function startGameMusic() {
 
 // ─── INPUT (PS5 & Keyboard) ───
 let lastInputTime=0;
-const keys={ArrowUp:false,ArrowDown:fhalse,ArrowLeft:false,ArrowRight:false,Enter:false,Escape:false,KeyR:false,KeyQ:false,KeyE:false};
+const keys={ArrowUp:false,ArrowDown:false,ArrowLeft:false,ArrowRight:false,Enter:false,Escape:false,KeyR:false,KeyQ:false,KeyE:false};
 window.addEventListener('keydown',(e)=>{initAudio();if(keys.hasOwnProperty(e.code))keys[e.code]=true;if(e.code==='Space')keys.Enter=true;});
 window.addEventListener('keyup',(e)=>{if(keys.hasOwnProperty(e.code))keys[e.code]=false;if(e.code==='Space')keys.Enter=false;});
 window.addEventListener('gamepadconnected',()=>{initAudio();});
