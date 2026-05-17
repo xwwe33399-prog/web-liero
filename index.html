@@ -4,36 +4,66 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PunkkiGAME- © Eeli Noronen</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
   body, html {
     margin: 0; padding: 0; width: 100%; height: 100%;
-    background-color: #1a0f06;
+    background-color: #000;
     display: flex; justify-content: center; align-items: center; flex-direction: column;
     overflow: hidden; font-family: 'VT323', monospace; color: #fff;
     touch-action: none;
   }
   #topBar {
-    width: 100%; display: flex; justify-content: center; padding: 10px; z-index: 100;
+    width: 100%; display: flex; justify-content: center; padding: 10px; z-index: 100; position: absolute; top: 0;
   }
   #fsBtn {
-    background: #333; color: #0f0; border: 2px solid #0f0; 
+    background: #222; color: #0f0; border: 2px solid #0f0; 
     font-family: 'VT323', monospace; font-size: 20px; padding: 5px 20px; cursor: pointer;
   }
-  #fsBtn:hover { background: #555; }
+  #fsBtn:hover { background: #444; }
   #gameWrapper { 
     position: relative; display: flex; justify-content: center; align-items: center; 
-    transition: all 0.3s ease; width: 100%; height: 100%;
+    width: 100%; height: 100%;
   }
   #gameCanvas { 
-    image-rendering: pixelated; border: 2px solid #553322; 
-    width: 100%; height: 100%; max-width: 1200px; max-height: 85vh; object-fit: contain;
+    image-rendering: pixelated; 
+    width: 100%; height: 100%; max-width: 1280px; max-height: 85vh; object-fit: contain;
+    border: 2px solid #333;
   }
-  #instructions {
-    position: absolute; bottom: 5px; left: 0; width: 100%;
-    color: #FFF; font-size: 16px; text-align: center; pointer-events: none;
-    text-shadow: 1px 1px 0 #000; letter-spacing: 0.5px;
+  
+  /* UI OVERLAYS */
+  .ui-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); display: none; flex-direction: column;
+    justify-content: center; align-items: center; z-index: 200;
   }
+  .ui-box {
+    background: #1a0f06; border: 4px solid #553322; padding: 30px;
+    display: flex; flex-direction: column; align-items: center; width: 400px;
+  }
+  h1 { margin-top: 0; color: #FFD700; text-shadow: 2px 2px #000; }
+  input[type="text"] {
+    background: #000; color: #0f0; border: 2px solid #444; font-family: 'VT323', monospace;
+    font-size: 24px; padding: 5px; width: 80%; margin-bottom: 20px; text-align: center;
+  }
+  .btn-group { display: flex; gap: 20px; margin-top: 20px; }
+  .btn {
+    background: #222; color: #fff; border: 2px solid #555; cursor: pointer;
+    font-family: 'VT323', monospace; font-size: 24px; padding: 10px 20px; transition: 0.2s;
+  }
+  .btn:hover, .btn.active { background: #0f0; color: #000; border-color: #fff; }
+  
+  #joinList {
+    width: 100%; height: 200px; background: #000; border: 2px solid #444;
+    overflow-y: auto; margin-bottom: 20px; list-style: none; padding: 0;
+  }
+  #joinList li {
+    padding: 10px; border-bottom: 1px solid #222; cursor: pointer; font-size: 20px; display: flex; justify-content: space-between;
+  }
+  #joinList li:hover, #joinList li.selected { background: #333; color: #0f0; }
+
   /* PS5 Fullscreen Fallback */
   .css-fullscreen #topBar { display: none; }
   .css-fullscreen #gameWrapper {
@@ -43,93 +73,129 @@
   .css-fullscreen #gameCanvas {
     width: 100%; height: 100%; border: none; max-width: 100%; max-height: 100%;
   }
-  .css-fullscreen #instructions { bottom: 20px; font-size: 20px; }
 </style>
 </head>
 <body>
 <div id="topBar"><button id="fsBtn">TOGGLE FULLSCREEN</button></div>
+
 <div id="gameWrapper">
   <canvas id="gameCanvas"></canvas>
-  <div id="instructions">
-    L-STICK/D-PAD: Move | R-STICK: Aim | X: Jump | R2: Shoot | △: Reload | L1/L2: Swap | □: Fullscreen
+  
+  <div id="hostUI" class="ui-overlay">
+    <div class="ui-box">
+      <h1>LUO PELI (HOST)</h1>
+      <label style="font-size:20px; margin-bottom:5px;">Lobbyn Nimi (Pakollinen):</label>
+      <input type="text" id="hostName" placeholder="Kirjoita nimi..." maxlength="15">
+      <label style="font-size:20px; margin-bottom:5px;">Tappoja Voittoon:</label>
+      <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px;">
+        <button class="btn" id="btnKillsMinus">-</button>
+        <span id="hostKillsVal" style="font-size:28px;">5</span>
+        <button class="btn" id="btnKillsPlus">+</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn" id="btnHostBack">TAKAISIN</button>
+        <button class="btn" id="btnHostCreate">LUO PELI</button>
+      </div>
+    </div>
   </div>
+
+  <div id="joinUI" class="ui-overlay">
+    <div class="ui-box" style="width: 500px;">
+      <h1>LIITY PELIIN</h1>
+      <ul id="joinList"></ul>
+      <div class="btn-group">
+        <button class="btn" id="btnJoinBack">TAKAISIN</button>
+        <button class="btn" id="btnJoinRefresh">PÄIVITÄ</button>
+      </div>
+    </div>
+  </div>
+
 </div>
+
 <script>
 /* ================================================================
-   PUNKKIPELI MASSIVE ENGINE v11 - © Eeli Noronen 2026
-   - 1v1 Bot Only, Tablet Optimized, Background Reloading, Better AI
-   - ULTRA REALISTIC BLOOD (Permanent, dripping) & CAVE GENERATION
+   PUNKKIPELI MASSIVE ENGINE v13 ONLINE - © Eeli Noronen 2026
+   - Full Firebase Multiplayer (Host/Join)
+   - Realtime physics sync, Player DC handling
+   - Advanced Gore, Seeded Terrain, Micro-jump fix, 60 FPS
    ================================================================ */
 
-// ─── FULLSCREEN LOGIC (PS5 & Tablet Fallback) ───
+// --- LIITÄ FIREBASE CONFIGURATIOSI TÄHÄN ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCYp_J6RPY49RCfoI4H88DG2NBgIGR3e0A",
+  authDomain: "punkkigame.firebaseapp.com",
+  databaseURL: "https://punkkigame-default-rtdb.firebaseio.com",
+  projectId: "punkkigame",
+  storageBucket: "punkkigame.firebasestorage.app",
+  messagingSenderId: "308792827770",
+  appId: "1:308792827770:web:bf8892d9a1a89ddda8c0c3"
+};
+
+// Alustetaan Firebase, jos conf on asetettu (estetään crash jos tyhjä)
+let db = null;
+let isFirebaseReady = false;
+if (firebaseConfig.apiKey !== "PASTE_HERE" && firebaseConfig.apiKey !== "") {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    isFirebaseReady = true;
+}
+
+// ─── FULLSCREEN LOGIC ───
 function toggleFullscreen() {
   const elem = document.documentElement;
   if (!document.fullscreenElement && !document.body.classList.contains("css-fullscreen")) {
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(err => {
-        document.body.classList.add("css-fullscreen");
-      });
-    } else {
-      document.body.classList.add("css-fullscreen");
-    }
+    if (elem.requestFullscreen) elem.requestFullscreen().catch(err => document.body.classList.add("css-fullscreen"));
+    else document.body.classList.add("css-fullscreen");
   } else {
-    if (document.exitFullscreen && document.fullscreenElement) {
-      document.exitFullscreen();
-    }
+    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
     document.body.classList.remove("css-fullscreen");
   }
 }
 document.getElementById('fsBtn').addEventListener('click', toggleFullscreen);
 
+// ─── SEEDED RANDOM ───
+let RNG_SEED = 1;
+function seededRandom() {
+    let x = Math.sin(RNG_SEED++) * 10000;
+    return x - Math.floor(x);
+}
+
 // ─── I18N ───
 const LANG_FI=1;
 let currentLang=LANG_FI;
-const i18n={
-  START_1P:["START 1-PLAYER (BOT)","ALOITA 1v1 BOTTI"],
-  OPTIONS:["OPTIONS","ASETUKSET"],
-  BACK:["BACK","TAKAISIN"],
-  BLOOD_ON:["BLOOD: ON","VERI: PÄÄLLÄ"],
-  BLOOD_OFF:["BLOOD: OFF","VERI: POIS"],
-  SHADOWS_ON:["SHADOWS: ON","VARJOT: PÄÄLLÄ"],
-  SHADOWS_OFF:["SHADOWS: OFF","VARJOT: POIS"],
-  SFX_VOL:["SFX VOLUME: ","ÄÄNITEHOSTEET: "],
-  MUSIC_VOL:["MUSIC VOLUME: ","MUSIIKKIVOLYYMI: "],
-  MAIN_MENU:["MAIN MENU","PÄÄVALIKKO"],
-  GAME_PAUSED:["GAME PAUSED","PELI KESKEYTETTY"],
-  WEBLIERO:["PunkkiGAME","PunkkiPELI"],
-  WINS_MATCH:[" WON THE MATCH!"," VOITTI PELIN!"]
-};
-function t(key){return i18n[key]?i18n[key][currentLang]:key;}
+function t(key) {
+    const texts = {
+        START_MP: "ONLINE MONINPELI",
+        OPTIONS: "ASETUKSET",
+        MUSIC: "MUSIIKKI: ",
+        GORE: "VERI: ",
+        SHADOWS: "VARJOT: ",
+        MAIN_MENU: "PÄÄVALIKKO",
+        WINS_MATCH: " VOITTI PELIN!",
+        WAITING: "ODOTETAAN PELAAJAA...",
+        HOST: "LUO PELI (HOST)",
+        JOIN: "LIITY PELIIN (JOIN)",
+        BACK: "TAKAISIN",
+        RESUME: "JATKA",
+        LEAVE: "POISTU PELISTÄ"
+    };
+    return texts[key] || key;
+}
 
 // ─── WEAPON CONSTANTS ───
-const W_HANDGUN=0,W_MINIGUN=1,W_GRENADE=2,W_SHOVEL=3,W_BAZOOKA=4,
-      W_DIRTBALL=5,W_SNIPER=6,W_CLUSTER=7,W_SHOTGUN=8,
-      W_FLAMETHROWER=9,W_MINE=10,W_ROPE=11,W_LASER=12,W_DYNAMITE=13,
-      W_HOMING=14,W_SHIELD=15,W_GAUSS=16,W_CHIQUITA=17,W_SUPERSHOTGUN=18,W_BOOMERANG=19,W_IMPLODER=20;
+const W_HANDGUN=0,W_MINIGUN=1,W_GRENADE=2,W_SHOVEL=3,W_BAZOOKA=4,W_DIRTBALL=5,W_SNIPER=6,W_CLUSTER=7,W_SHOTGUN=8,W_FLAMETHROWER=9,W_MINE=10,W_ROPE=11,W_LASER=12,W_DYNAMITE=13,W_HOMING=14,W_SHIELD=15,W_GAUSS=16,W_CHIQUITA=17,W_SUPERSHOTGUN=18,W_BOOMERANG=19,W_IMPLODER=20;
 
-const WEAPON_NAMES=[
-  ["PISTOL","PISTOOLI"],["MINIGUN","MINIGUN"],["GRENADE","KRANAATTI"],
-  ["SHOVEL","LAPIO"],["BAZOOKA","SINKO"],["DIRTBALL","MUTAPALLO"],
-  ["SNIPER","TARKKA-AMPUJA"],["CLUSTER","RYPÄLEPOMMI"],
-  ["SHOTGUN","HAULIKKO"],["FLAMETHROWER","LIEKINHEITIN"],
-  ["MINE","MIINA"],["NINJA ROPE","NINJAKÖYSI"],
-  ["LASER RIFLE","LASERKIVÄÄRI"],["DYNAMITE","DYNAMIITTI"],
-  ["HOMING MISSILE","OHJUS"],["SHIELD","KILPI"],
-  ["GAUSS GUN","GAUSS-KIVÄÄRI"],["CHIQUITA BOMB","CHIQUITA-POMMI"],
-  ["SUPER SHOTGUN","SUPER-HAULIKKO"],["BOOMERANG","BUMERANGI"],
-  ["GRAVITY IMPLODER","GRAVITAATIOPOMMI"]
-];
+const WEAPON_NAMES=["PISTOOLI","MINIGUN","KRANAATTI","LAPIO","SINKO","MUTAPALLO","TARKKA-AMPUJA","RYPÄLEPOMMI","HAULIKKO","LIEKINHEITIN","MIINA","NINJAKÖYSI","LASERKIVÄÄRI","DYNAMIITTI","OHJUS","KILPI","GAUSS-KIVÄÄRI","CHIQUITA-POMMI","SUPER-HAULIKKO","BUMERANGI","GRAVITAATIOPOMMI"];
 const MAX_AMMO=[12,100,3,1,1,5,5,1,8,300,3,1,4,2,2,1,3,2,4,2,2];
 const RELOAD_TIMES=[55,80,130,0,160,100,190,160,60,240,130,0,140,160,180,1500,120,150,80,200,300];
 
-// ─── ENGINE CONFIG (Tablet Optimized) ───
+// ─── ENGINE CONFIG ───
 const MAP_W=1000,MAP_H=600;
-const VIEW_W=320,VIEW_H=200; 
-const HUD_H=60;
-const CANVAS_W=VIEW_W*2,CANVAS_H=VIEW_H+HUD_H;
+const VIEW_W=340,VIEW_H=220;
+const HUD_H=50;
+const CANVAS_W=VIEW_W*2,CANVAS_H=VIEW_H*2+HUD_H;
 const SCALE=2;
 const GRAVITY=0.15,FRICTION=0.85;
-
 const TERRAIN_EMPTY=0,TERRAIN_DIRT=1,TERRAIN_ROCK=6;
 
 const canvas=document.getElementById('gameCanvas');
@@ -143,8 +209,7 @@ const bloodCtx=bloodCanvas.getContext('2d');
 
 const bgNoiseCanvas=document.createElement('canvas'); bgNoiseCanvas.width=256;bgNoiseCanvas.height=256;
 (function(){
-  const nc=bgNoiseCanvas.getContext('2d');
-  const img=nc.createImageData(256,256);
+  const nc=bgNoiseCanvas.getContext('2d'); const img=nc.createImageData(256,256);
   for(let i=0;i<img.data.length;i+=4){
     const v=18+Math.floor(Math.random()*22);
     img.data[i]=Math.floor(v*1.1);img.data[i+1]=Math.floor(v*0.7);
@@ -153,45 +218,51 @@ const bgNoiseCanvas=document.createElement('canvas'); bgNoiseCanvas.width=256;bg
   nc.putImageData(img,0,0);
 })();
 function drawBgNoise() {
-  const pat = ctx.createPattern(bgNoiseCanvas, 'repeat');
-  ctx.fillStyle = pat; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.fillStyle = ctx.createPattern(bgNoiseCanvas, 'repeat'); ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 }
 
 // ─── GAME STATE ───
-const STATE_MENU=0,STATE_OPTIONS=1,STATE_FADING=3,STATE_LOADING=4,STATE_PLAYING=5,STATE_VICTORY=13,STATE_COUNTDOWN=18;
+const STATE_MENU=0, STATE_OPTIONS=1, STATE_MP_MENU=2, STATE_LOBBY_WAIT=3, 
+      STATE_FADING=4, STATE_PLAYING=5, STATE_PAUSED=6, STATE_VICTORY=7, STATE_DISCONNECT=8;
+
 let gameState=STATE_MENU;
 
-// SIIVOTTU MENU: Vain 1v1 Botti ja Asetukset
-const mainMenuOptions=["START_1P","OPTIONS"];
-const gfxMenuOptions=["BLOOD","SHADOWS","BACK"];
+const mainMenuOptions=["START_MP","OPTIONS"];
+const mpMenuOptions=["HOST","JOIN","BACK"];
+const gfxMenuOptions=["MUSIC", "GORE", "SHADOWS", "BACK"];
+const pauseMenuOptions=["RESUME", "LEAVE"];
 
-let mainMenuSel=0,optionsMenuSel=0;
-let settingBlood=true,settingShadows=true;
-let settingSfxVol=8,settingMusicVol=3;
+let mainMenuSel=0, mpMenuSel=0, optionsMenuSel=0, pauseMenuSel=0;
+let settingMusic=true, settingGore=true, settingShadows=true;
+let settingSfxVol=8,settingMusicVol=4;
 
-let countdownValue=3,countdownTimer=0;
 let fadeAlpha=0,matchWinnerId=-1,screenShake=0,victoryTimer=0;
+let pingMs = 0;
+let onlineCount = 0;
 
-// LOADOUTS: Ei pistoolia tai laseria. Lapio (3) mukana.
+// MULTIPLAYER VARS
+let myPlayerId = 0; // 0 = Host, 1 = Client
+let currentLobbyId = null;
+let lobbyKillsToWin = 5;
+let isHost = false;
+let mpSyncTimer = 0;
+let lastPingTime = 0;
+
 let wsLoadouts=Array(2).fill().map(()=>[1, 8, 13, 3, 4, 2]); 
-let activeGamepadIndices=[0, 'BOT']; 
-let customizeSkins=[1,0]; 
-
-const PLAYER_NAMES=['Pelaaja 1','Tekoäly Botti'];
+let activeGamepadIndices=[0, 1]; 
+const PLAYER_NAMES=['Pelaaja 1 (HOST)','Pelaaja 2 (JOIN)'];
 const PLAYER_COLORS=['#5599FF','#FF5555'];
 
 // ─── SPRITES ───
 const SPRITES={
-  BALL:[" 5555 "," 511115 ","51144115","51444415","51444415"," 51144115"," 511115 "," 5555 "],
   OIKOTIEMIES_STAND:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 5B55B5 "," 55 55 "],
   OIKOTIEMIES_WALK1:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 55BB55 "," 5  55 "],
   OIKOTIEMIES_WALK2:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 5BB5 "," 555BB5 "," 55 5 "],
   OIKOTIEMIES_JUMP:[" 5555 "," 5CCCC5 "," 5C4C4C5"," 5CCCC5 "," 5BAB25 ","5BABAB25","5BABAB525"," 5BAB25 "," 55BB55 ","55  55","        "]
 };
 function getSpriteColor(c,color){
-  if(c===' ')return null; if(c==='1')return color; if(c==='2')return '#1A5B9E';
-  if(c==='3')return '#FFCDB2'; if(c==='4')return '#FFFFFF'; if(c==='5')return '#000000';
-  if(c==='A')return '#C87820'; if(c==='B')return '#8B4010'; if(c==='C')return '#FFCDB2'; return '#FF00FF';
+  if(c===' ')return null; if(c==='1'||c==='A'||c==='B')return color; if(c==='2')return '#1A5B9E';
+  if(c==='4')return '#FFFFFF'; if(c==='5')return '#000000'; if(c==='C')return '#FFCDB2'; return '#FF00FF';
 }
 function genSprite(rows,color){
   const sc=document.createElement('canvas'); sc.width=9;sc.height=11; const sx=sc.getContext('2d');
@@ -203,17 +274,10 @@ function genSprite(rows,color){
   }
   return sc;
 }
-function buildPlayerSprites(p){
-  if(p.skinType===0){
-    p.spriteStand=genSprite(SPRITES.BALL,p.color); p.spriteWalk1=p.spriteStand; p.spriteWalk2=p.spriteStand; p.spriteJump=p.spriteStand;
-  }else{
-    p.spriteStand=genSprite(SPRITES.OIKOTIEMIES_STAND,p.color); p.spriteWalk1=genSprite(SPRITES.OIKOTIEMIES_WALK1,p.color);
-    p.spriteWalk2=genSprite(SPRITES.OIKOTIEMIES_WALK2,p.color); p.spriteJump=genSprite(SPRITES.OIKOTIEMIES_JUMP,p.color);
-  }
-}
 
-// ─── AUDIO SYSTEM ───
-let audioCtx=null,masterSFXGain=null,masterMusicGain=null,isMenuMusicPlaying=false;
+// ─── AUDIO SYSTEM & MUSIC ───
+let audioCtx=null,masterSFXGain=null,masterMusicGain=null;
+let gameMusicInterval=null;
 
 function initAudio(){
   if(!audioCtx){
@@ -256,13 +320,26 @@ function playSound(type){
   else if(type==='explosion_puff')mkOG('sine',60,0.5,0.3,15);
   else if(type==='sticky_beep')mkOG('square',1100,0.2,0.05,700);
 }
-function startMenuMusic(){ isMenuMusicPlaying=true; }
-function stopMenuMusic(){ isMenuMusicPlaying=false; }
-function playWinMusic(){ if(audioCtx) playSound('spawn'); }
+function startGameMusic() {
+  if(gameMusicInterval) clearInterval(gameMusicInterval);
+  if(!settingMusic || !audioCtx) return;
+  let notes = [220, 261, 329, 261, 196, 220, 164, 196]; let step = 0;
+  gameMusicInterval = setInterval(() => {
+      if(gameState !== STATE_PLAYING && gameState !== STATE_PAUSED) { clearInterval(gameMusicInterval); return; }
+      if(!settingMusic) return;
+      const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.connect(g); g.connect(masterMusicGain); osc.type = 'triangle';
+      osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
+      g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+      osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.25);
+      step++;
+  }, 300);
+}
 
 // ─── INPUT (PS5 & Keyboard) ───
 let lastInputTime=0;
-const keys={ArrowUp:false,ArrowDown:false,ArrowLeft:false,ArrowRight:false,Enter:false,Escape:false,KeyR:false,KeyQ:false};
+const keys={ArrowUp:false,ArrowDown:false,ArrowLeft:false,ArrowRight:false,Enter:false,Escape:false,KeyR:false,KeyQ:false,KeyE:false};
 window.addEventListener('keydown',(e)=>{initAudio();if(keys.hasOwnProperty(e.code))keys[e.code]=true;if(e.code==='Space')keys.Enter=true;});
 window.addEventListener('keyup',(e)=>{if(keys.hasOwnProperty(e.code))keys[e.code]=false;if(e.code==='Space')keys.Enter=false;});
 window.addEventListener('gamepadconnected',()=>{initAudio();});
@@ -276,35 +353,252 @@ function gpIs(gp,action){
     case 'DOWN':return b(13)||ax(1)>0.5;
     case 'LEFT':return b(14)||ax(0)<-0.5;
     case 'RIGHT':return b(15)||ax(0)>0.5;
-    case 'SELECT':return b(0); // X
-    case 'BACK':return b(1); // Circle
-    case 'TRIANGLE':return b(3); // Triangle
-    case 'SQUARE': return b(2); // Square
+    case 'SELECT':return b(0); 
+    case 'BACK':return b(1); 
+    case 'TRIANGLE':return b(3); 
+    case 'SQUARE': return b(2); 
+    case 'START': return b(9) || b(10); // Options/Start
   }
   return false;
 }
-function getGamepadInput(playerIndex){
-  const gamepads=navigator.getGamepads?navigator.getGamepads():[];
-  if(activeGamepadIndices[playerIndex]==='BOT') return null;
-  let connected=[];
-  for(let i=0;i<gamepads.length;i++)if(gamepads[i]&&gamepads[i].connected)connected.push(gamepads[i]);
-  return connected[0]||null; 
-}
-const gpBtn=(gp,i)=>gp&&gp.buttons&&gp.buttons[i]&&gp.buttons[i].pressed;
-const gpAx=(gp,i)=>(gp&&gp.axes&&gp.axes.length>i)?gp.axes[i]:0;
-const wrap=(v,len)=>((v%len)+len)%len;
-const clamp=(v,mn,mx)=>Math.max(mn,Math.min(mx,v));
+function getLocalInput() {
+  // Yhdistetty paikallinen input (Pelaajalla on aina vain yksi ohjain koneella)
+  let kLeft=false, kRight=false, kJump=false, kShoot=false, kReload=false, kSwapNext=false, kSwapPrev=false;
+  let aimAngle=0, aimActive=false;
 
+  kLeft=keys.ArrowLeft; kRight=keys.ArrowRight; kJump=keys.ArrowUp; kShoot=keys.Enter; 
+  kReload=keys.KeyR; kSwapNext=keys.KeyE; kSwapPrev=keys.KeyQ; 
+  
+  const gamepads=navigator.getGamepads?navigator.getGamepads():[];
+  for(let i=0; i<gamepads.length; i++) {
+      const gp = gamepads[i]; if(!gp || !gp.connected) continue;
+      if(gpIs(gp,'SELECT')) kJump=true;
+      if(gpBtn(gp,7)) kShoot=true; 
+      if(gpIs(gp,'TRIANGLE')) kReload=true;
+      if(gpBtn(gp,6)) kSwapNext=true; // L2
+      if(gpBtn(gp,4)) kSwapPrev=true; // L1
+      
+      let ax = gpAx(gp,0), ay = gpAx(gp,1);
+      if(Math.abs(ax)>0.2) { if(ax<0)kLeft=true; else kRight=true; }
+      let rx = gpAx(gp,2), ry = gpAx(gp,3);
+      if(Math.abs(rx)>0.2 || Math.abs(ry)>0.2) {
+          aimAngle = Math.atan2(ry, rx);
+          aimActive = true;
+      }
+  }
+  return { left: kLeft, right: kRight, jump: kJump, shoot: kShoot, reload: kReload, swapN: kSwapNext, swapP: kSwapPrev, aimAngle, aimActive };
+}
+
+// ─── FIREBASE MULTIPLAYER LOGIC ───
+function setupFirebasePresence() {
+    if(!isFirebaseReady) return;
+    const amOnline = db.ref('.info/connected');
+    const userRef = db.ref('presence/' + Math.random().toString(36).substring(2));
+    amOnline.on('value', snap => {
+        if(snap.val()) { userRef.onDisconnect().remove(); userRef.set(true); }
+    });
+    db.ref('presence').on('value', snap => { onlineCount = snap.numChildren(); });
+}
+setupFirebasePresence();
+
+function createLobby(name, kills) {
+    if(!isFirebaseReady) { alert("Firebase puuttuu!"); return; }
+    currentLobbyId = db.ref('lobbies').push().key;
+    isHost = true; myPlayerId = 0; lobbyKillsToWin = kills;
+    RNG_SEED = Math.floor(Math.random() * 1000000);
+    
+    db.ref('lobbies/' + currentLobbyId).set({
+        name: name, killsToWin: kills, mapSeed: RNG_SEED, state: 'waiting', 
+        p1: { ready: true }, p2: { ready: false }, left: false
+    });
+    
+    db.ref('lobbies/' + currentLobbyId + '/p2/ready').on('value', snap => {
+        if(snap.val() === true && gameState === STATE_LOBBY_WAIT) {
+            db.ref('lobbies/' + currentLobbyId + '/state').set('playing');
+            startFadeToGame(true);
+        }
+    });
+
+    db.ref('lobbies/' + currentLobbyId + '/left').on('value', snap => {
+        if(snap.val() === true && gameState === STATE_PLAYING) disconnectGame();
+    });
+
+    gameState = STATE_LOBBY_WAIT;
+    document.getElementById('hostUI').style.display = 'none';
+}
+
+function joinLobby(lobbyId) {
+    if(!isFirebaseReady) return;
+    currentLobbyId = lobbyId; isHost = false; myPlayerId = 1;
+    
+    db.ref('lobbies/' + currentLobbyId).once('value', snap => {
+        const data = snap.val();
+        if(data && data.state === 'waiting') {
+            lobbyKillsToWin = data.killsToWin;
+            RNG_SEED = data.mapSeed;
+            db.ref('lobbies/' + currentLobbyId + '/p2').update({ready: true});
+            
+            db.ref('lobbies/' + currentLobbyId + '/left').on('value', snap => {
+                if(snap.val() === true && gameState === STATE_PLAYING) disconnectGame();
+            });
+
+            startFadeToGame(true);
+        } else {
+            alert("Lobby on täynnä tai poistettu!");
+            document.getElementById('joinUI').style.display = 'none';
+            gameState = STATE_MENU;
+        }
+    });
+}
+
+function fetchLobbies() {
+    if(!isFirebaseReady) return;
+    db.ref('lobbies').once('value', snap => {
+        const list = document.getElementById('joinList');
+        list.innerHTML = "";
+        const lobbies = snap.val();
+        if(lobbies) {
+            for(const [key, lobby] of Object.entries(lobbies)) {
+                if(lobby.state === 'waiting') {
+                    const li = document.createElement('li');
+                    li.innerText = `${lobby.name} (Tapot: ${lobby.killsToWin})`;
+                    li.onclick = () => joinLobby(key);
+                    list.appendChild(li);
+                }
+            }
+        }
+        if(list.innerHTML === "") list.innerHTML = "<li style='text-align:center; color:#888;'>Ei avoimia pelejä.</li>";
+    });
+}
+
+function leaveGame() {
+    if(currentLobbyId && isFirebaseReady) {
+        db.ref('lobbies/' + currentLobbyId + '/left').set(true);
+        db.ref('lobbies/' + currentLobbyId).remove();
+    }
+    disconnectGame();
+}
+
+function disconnectGame() {
+    gameState = STATE_DISCONNECT;
+    currentLobbyId = null;
+    setTimeout(() => { gameState = STATE_MENU; }, 3000);
+}
+
+function sendEvent(type, x, y, dirX, dirY, w) {
+    if(!isFirebaseReady || !currentLobbyId) return;
+    db.ref('lobbies/' + currentLobbyId + '/events').push({
+        type, pid: myPlayerId, w, x, y, dirX, dirY, ts: firebase.database.ServerValue.TIMESTAMP
+    });
+}
+
+function listenToEvents() {
+    if(!isFirebaseReady || !currentLobbyId) return;
+    db.ref('lobbies/' + currentLobbyId + '/events').on('child_added', snap => {
+        const ev = snap.val();
+        if(ev.pid !== myPlayerId) {
+            // Execute remote event
+            let p = players[ev.pid];
+            if(p) {
+                if(ev.type === 'shoot') {
+                    playSound(ev.w===W_SHOTGUN?'shoot_shotgun':(ev.w===W_MINIGUN?'shoot_minigun':(ev.w===W_BAZOOKA?'explosion_puff':'shoot_handgun')));
+                    if(ev.w === W_MINIGUN) bullets.push(new Bullet(ev.x, ev.y, ev.dirX*9, ev.dirY*9, ev.pid, ev.w));
+                    else if(ev.w === W_SHOTGUN) {
+                        for(let i=0; i<8; i++) bullets.push(new Bullet(ev.x, ev.y, ev.dirX*10, ev.dirY*10, ev.pid, ev.w)); // Approksimoitu spread remote-pelaajalle
+                    }
+                    else if(ev.w === W_BAZOOKA) bullets.push(new Bullet(ev.x, ev.y, ev.dirX*6, ev.dirY*6, ev.pid, ev.w));
+                    else if(ev.w === W_GRENADE || ev.w === W_DYNAMITE) grenades.push(new Grenade(ev.x, ev.y, ev.dirX*7, ev.dirY*7, ev.pid, ev.w));
+                }
+                else if(ev.type === 'shovel') {
+                    playSound('shovel');
+                    jaggedCarve(ev.x, ev.y, 15, true); renderFullTerrainCanvas();
+                }
+            }
+        }
+    });
+
+    // PING PONG
+    db.ref('lobbies/' + currentLobbyId + '/ping/' + (isHost?1:0)).on('value', snap => {
+        if(snap.val()) db.ref('lobbies/' + currentLobbyId + '/pong/' + myPlayerId).set(snap.val());
+    });
+    db.ref('lobbies/' + currentLobbyId + '/pong/' + (isHost?1:0)).on('value', snap => {
+        if(snap.val() && lastPingTime > 0) pingMs = Date.now() - lastPingTime;
+    });
+}
+
+function syncMultiplayer() {
+    if(!isFirebaseReady || !currentLobbyId || gameState !== STATE_PLAYING) return;
+    
+    // Send my state
+    let me = players[myPlayerId];
+    db.ref('lobbies/' + currentLobbyId + '/p' + (myPlayerId+1)).update({
+        x: Math.floor(me.x), y: Math.floor(me.y), aim: me.aimAngle, 
+        fr: me.facingRight, w: me.weaponIndex, walk: me.isWalking, hp: me.hp, kills: me.kills
+    });
+
+    // Read remote state (No direct DB read in loop, rely on on('value'))
+    
+    // Ping check
+    if(Date.now() - lastPingTime > 2000) {
+        lastPingTime = Date.now();
+        db.ref('lobbies/' + currentLobbyId + '/ping/' + myPlayerId).set(lastPingTime);
+    }
+}
+
+function startListeningToRemote() {
+    let remoteId = isHost ? 1 : 0;
+    db.ref('lobbies/' + currentLobbyId + '/p' + (remoteId+1)).on('value', snap => {
+        const data = snap.val();
+        if(data && players[remoteId]) {
+            let p = players[remoteId];
+            // Snap position (Simple interpolation could be added, but snap is okay for 60fps)
+            p.x = data.x; p.y = data.y; p.aimAngle = data.aim;
+            p.facingRight = data.fr; p.weaponIndex = data.w; p.isWalking = data.walk;
+            p.hp = data.hp; p.kills = data.kills;
+        }
+    });
+}
+
+// ─── DOM EVENT LISTENERS FOR HTML FORMS ───
+document.getElementById('btnHostCreate').addEventListener('click', () => {
+    let name = document.getElementById('hostName').value.trim();
+    if(name.length === 0) { alert("Nimi on pakollinen!"); return; }
+    createLobby(name, parseInt(document.getElementById('hostKillsVal').innerText));
+});
+document.getElementById('btnHostBack').addEventListener('click', () => {
+    document.getElementById('hostUI').style.display = 'none'; gameState = STATE_MP_MENU;
+});
+document.getElementById('btnKillsMinus').addEventListener('click', () => {
+    let v = parseInt(document.getElementById('hostKillsVal').innerText);
+    if(v > 1) document.getElementById('hostKillsVal').innerText = v - 1;
+});
+document.getElementById('btnKillsPlus').addEventListener('click', () => {
+    let v = parseInt(document.getElementById('hostKillsVal').innerText);
+    if(v < 50) document.getElementById('hostKillsVal').innerText = v + 1;
+});
+document.getElementById('btnJoinRefresh').addEventListener('click', fetchLobbies);
+document.getElementById('btnJoinBack').addEventListener('click', () => {
+    document.getElementById('joinUI').style.display = 'none'; gameState = STATE_MP_MENU;
+});
+
+// ─── UI HANDLING IN GAME LOOP ───
 function handleMenuInput(){
   const now=Date.now();
   let navUp=false,navDown=false,navLeft=false,navRight=false,select=false,back=false, fsPress=false;
-  if(now-lastInputTime>150){if(keys.ArrowUp)navUp=true;if(keys.ArrowDown)navDown=true;if(keys.ArrowLeft)navLeft=true;if(keys.ArrowRight)navRight=true;}
+  
+  if(now-lastInputTime>150){
+      if(keys.ArrowUp)navUp=true; if(keys.ArrowDown)navDown=true; 
+      if(keys.ArrowLeft)navLeft=true; if(keys.ArrowRight)navRight=true;
+  }
   if(now-lastInputTime>200){if(keys.Enter)select=true;if(keys.Escape)back=true;}
   
   const gamepads=navigator.getGamepads?navigator.getGamepads():[];
   for(let i=0;i<gamepads.length;i++){
     const gp=gamepads[i];if(!gp||!gp.connected)continue;
-    if(now-lastInputTime>150){if(gpIs(gp,'UP'))navUp=true;if(gpIs(gp,'DOWN'))navDown=true;if(gpIs(gp,'LEFT'))navLeft=true;if(gpIs(gp,'RIGHT'))navRight=true;}
+    if(now-lastInputTime>150){
+        if(gpIs(gp,'UP'))navUp=true; if(gpIs(gp,'DOWN'))navDown=true;
+        if(gpIs(gp,'LEFT'))navLeft=true; if(gpIs(gp,'RIGHT'))navRight=true;
+    }
     if(now-lastInputTime>200){
       if(gpIs(gp,'SELECT'))select=true; 
       if(gpIs(gp,'BACK'))back=true;
@@ -315,33 +609,72 @@ function handleMenuInput(){
   if(fsPress) { toggleFullscreen(); playSound('click'); lastInputTime=now+200; }
 
   let moved=false;
+  
   if(gameState===STATE_MENU){
-    if(!isMenuMusicPlaying&&audioCtx)startMenuMusic();
     let oldSel=mainMenuSel;
     if(navUp)mainMenuSel=wrap(mainMenuSel-1,mainMenuOptions.length);
     if(navDown)mainMenuSel=wrap(mainMenuSel+1,mainMenuOptions.length);
     if(oldSel!==mainMenuSel)moved=true;
-    if(moved)playSound('hover');
+    
     if(select){
       playSound('click');
-      if(mainMenuSel===0){startFadeToGame(true);} 
-      else if(mainMenuSel===1){gameState=STATE_OPTIONS;}
+      if(mainMenuSel===0){ gameState = STATE_MP_MENU; } 
+      else if(mainMenuSel===1){ gameState = STATE_OPTIONS; }
       lastInputTime=now+100;
     }
   }
+  else if(gameState===STATE_MP_MENU) {
+    let oldSel=mpMenuSel;
+    if(navUp)mpMenuSel=wrap(mpMenuSel-1,mpMenuOptions.length);
+    if(navDown)mpMenuSel=wrap(mpMenuSel+1,mpMenuOptions.length);
+    if(oldSel!==mpMenuSel)moved=true;
+    
+    if(select) {
+        playSound('click');
+        if(mpMenuSel===0) { document.getElementById('hostUI').style.display = 'flex'; gameState = -1; } // UI hoitaa
+        else if(mpMenuSel===1) { document.getElementById('joinUI').style.display = 'flex'; fetchLobbies(); gameState = -1; }
+        else if(mpMenuSel===2) { gameState = STATE_MENU; }
+        lastInputTime=now+100;
+    }
+    if(back) { playSound('click'); gameState = STATE_MENU; lastInputTime=now+100; }
+  }
   else if(gameState===STATE_OPTIONS){
     let oldSel=optionsMenuSel;
-    if(navUp)optionsMenuSel=wrap(optionsMenuSel-1,3);
-    if(navDown)optionsMenuSel=wrap(optionsMenuSel+1,3);
+    if(navUp)optionsMenuSel=wrap(optionsMenuSel-1,gfxMenuOptions.length);
+    if(navDown)optionsMenuSel=wrap(optionsMenuSel+1,gfxMenuOptions.length);
     if(oldSel!==optionsMenuSel)moved=true;
-    if(moved)playSound('hover');
-    if(back || (select && optionsMenuSel===2)){playSound('click');gameState=STATE_MENU;}
+    
+    if(select){
+        playSound('click');
+        if(optionsMenuSel===0) settingMusic = !settingMusic;
+        if(optionsMenuSel===1) settingGore = !settingGore;
+        if(optionsMenuSel===2) settingShadows = !settingShadows;
+        if(optionsMenuSel===3) gameState=STATE_MENU;
+        lastInputTime=now+100;
+    }
+    if(back){playSound('click');gameState=STATE_MENU; lastInputTime=now+100;}
   }
+  else if(gameState===STATE_PAUSED) {
+      let oldSel=pauseMenuSel;
+      if(navUp)pauseMenuSel=wrap(pauseMenuSel-1,pauseMenuOptions.length);
+      if(navDown)pauseMenuSel=wrap(pauseMenuSel+1,pauseMenuOptions.length);
+      if(oldSel!==pauseMenuSel)moved=true;
+      
+      if(select) {
+          playSound('click');
+          if(pauseMenuSel===0) gameState = STATE_PLAYING;
+          if(pauseMenuSel===1) leaveGame();
+          lastInputTime=now+100;
+      }
+      if(back) { playSound('click'); gameState = STATE_PLAYING; lastInputTime=now+100; }
+  }
+  
+  if(moved)playSound('hover');
   if(moved||select||back||navLeft||navRight)lastInputTime=now;
 }
 
 function startFadeToGame(genNew){
-  gameState=STATE_FADING; fadeAlpha=0; stopMenuMusic();
+  gameState=STATE_FADING; fadeAlpha=0;
   const fi=setInterval(()=>{
     fadeAlpha+=0.05;
     if(fadeAlpha>=1.0){
@@ -353,6 +686,7 @@ function startFadeToGame(genNew){
           if(fadeAlpha<=0){
             clearInterval(fi2); gameState=STATE_COUNTDOWN;
             countdownValue=3;countdownTimer=60; playSound('spawn');
+            listenToEvents(); startListeningToRemote(); startGameMusic();
           }
         },30);
       },50);
@@ -360,8 +694,9 @@ function startFadeToGame(genNew){
   },30);
 }
 
-// ─── TERRAIN SYSTEM & CAVE GENERATION ───
+// ─── TERRAIN SYSTEM & GENERATION ───
 let terrainMap=new Uint8Array(MAP_W*MAP_H);
+
 function fastCarve(cx,cy,radius,val,forceErase=false){
   cx=Math.floor(cx);cy=Math.floor(cy);const rSq=radius*radius;
   const x0=Math.max(0,cx-radius),x1=Math.min(MAP_W-1,cx+radius);
@@ -377,7 +712,6 @@ function fastCarve(cx,cy,radius,val,forceErase=false){
   }
 }
 
-// Tämä pyyhkii maata, mutta poistaa veren tarkasti räjähdyksen alueelta, ettei jää leijuvia pisaroita!
 function jaggedCarve(cx,cy,baseRadius,forceErase=false){
   cx=Math.floor(cx);cy=Math.floor(cy); const maxR=baseRadius+10;
   const x0=Math.max(0,cx-maxR),x1=Math.min(MAP_W-1,cx+maxR);
@@ -400,21 +734,16 @@ function jaggedCarve(cx,cy,baseRadius,forceErase=false){
   }
   if(changed){ 
     mapCtx.putImageData(imgData,x0,y0); 
-    // Pyyhitään veri tarkasti räjähdysympyrästä, ei koko bounding boxista
     bloodCtx.save();
     bloodCtx.globalCompositeOperation = 'destination-out';
-    bloodCtx.beginPath();
-    bloodCtx.arc(cx, cy, baseRadius+15, 0, Math.PI*2);
-    bloodCtx.fill();
+    bloodCtx.beginPath(); bloodCtx.arc(cx, cy, baseRadius+15, 0, Math.PI*2); bloodCtx.fill();
     bloodCtx.restore();
   }
 }
 
-// UUSI CAVE GENERATOR: Luo mutkittelevia luolastoja taivaalta putoamisen sijaan
 function generateTerrain(){
   terrainMap.fill(TERRAIN_DIRT);
   
-  // Reunat kalliota
   for(let y=0;y<MAP_H;y++){
     const row=y*MAP_W;
     for(let x=0;x<MAP_W;x++){
@@ -422,35 +751,29 @@ function generateTerrain(){
     }
   }
   
-  // Worm Algorithm luolille
   let numWorms = 18;
   for(let i=0; i<numWorms; i++) {
-    let wx = 50 + Math.random()*(MAP_W-100);
-    let wy = 50 + Math.random()*(MAP_H-100);
-    let angle = Math.random() * Math.PI * 2;
-    let radius = 20 + Math.random()*25;
-    let steps = 80 + Math.random()*150;
+    let wx = 50 + seededRandom()*(MAP_W-100);
+    let wy = 50 + seededRandom()*(MAP_H-100);
+    let angle = seededRandom() * Math.PI * 2;
+    let radius = 20 + seededRandom()*25;
+    let steps = 80 + seededRandom()*150;
     
     for(let s=0; s<steps; s++) {
       fastCarve(wx, wy, radius, TERRAIN_EMPTY, true);
       wx += Math.cos(angle) * (radius * 0.5);
       wy += Math.sin(angle) * (radius * 0.5);
-      angle += (Math.random() - 0.5) * 1.5; // Kiemurtelee satunnaisesti
-      radius += (Math.random() - 0.5) * 3;
-      radius = clamp(radius, 15, 45); // Koko vaihtelee
-      
-      // Kimmotaan reunoista takaisin sisään
+      angle += (seededRandom() - 0.5) * 1.5; 
+      radius += (seededRandom() - 0.5) * 3;
+      radius = clamp(radius, 15, 45); 
       if (wx < 50 || wx > MAP_W-50) angle += Math.PI;
       if (wy < 50 || wy > MAP_H-50) angle += Math.PI;
     }
   }
   
-  // Lisätään luolastoon pieniä kiviröykkiöitä
-  for(let i=0;i<100;i++) fastCarve(50+Math.random()*(MAP_W-100), 50+Math.random()*(MAP_H-100), 10+Math.random()*15, TERRAIN_ROCK, false);
+  for(let i=0;i<100;i++) fastCarve(50+seededRandom()*(MAP_W-100), 50+seededRandom()*(MAP_H-100), 10+seededRandom()*15, TERRAIN_ROCK, false);
   
   renderFullTerrainCanvas();
-  
-  // Nollataan verikangas uutta kenttää varten
   bloodCtx.clearRect(0,0,MAP_W,MAP_H);
 }
 
@@ -459,37 +782,37 @@ function renderFullTerrainCanvas(){
   for(let i=0;i<terrainMap.length;i++){
     if(terrainMap[i]>0){
       const p=i*4; img.data[p+3]=255;
-      if(terrainMap[i]===TERRAIN_ROCK){ img.data[p]=90;img.data[p+1]=95;img.data[p+2]=100; }
-      else { img.data[p]=110;img.data[p+1]=65;img.data[p+2]=25; } // Hieman tummempi multa
+      
+      let x = i % MAP_W, y = Math.floor(i / MAP_W);
+      let hash = (Math.sin(x*12.9898 + y*78.233) * 43758.5453) % 1;
+      let n = (hash - 0.5) * 30; 
+      
+      if(terrainMap[i]===TERRAIN_ROCK){ 
+        img.data[p]=clamp(90+n,0,255); img.data[p+1]=clamp(95+n,0,255); img.data[p+2]=clamp(100+n,0,255); 
+      }
+      else { 
+        img.data[p]=clamp(110+n,0,255); img.data[p+1]=clamp(65+n,0,255); img.data[p+2]=clamp(25+n,0,255); 
+      } 
     }
   }
   mapCtx.putImageData(img,0,0);
 }
 function isSolid(x,y){if(x<0||x>=MAP_W||y<0||y>=MAP_H)return true;return terrainMap[Math.floor(y)*MAP_W+Math.floor(x)]>0;}
 
-// Älykäs luolaspawni
 function getCaveSpawn(isPlayer1) {
     for(let i=0; i<2000; i++) {
-        let x = 50 + Math.random()*(MAP_W-100);
-        // P1 yrittää alkuun spawnata vasemmalle, Botti oikealle
+        let x = 50 + seededRandom()*(MAP_W-100);
         if (isPlayer1 && x > MAP_W/2 && i < 1000) continue; 
         if (!isPlayer1 && x < MAP_W/2 && i < 1000) continue;
 
-        let y = 50 + Math.random()*(MAP_H-150);
+        let y = 50 + seededRandom()*(MAP_H-150);
         
-        // Onko pisteessä ilmaa? (Ja onko ympärillä vähän tilaa)
         if (!isSolid(x, y) && !isSolid(x, y+5) && !isSolid(x+5, y) && !isSolid(x-5, y)) {
-            // Skannataan alaspäin löytääksemme maan (pohjan)
             let groundY = y;
             while(groundY < MAP_H && !isSolid(x, groundY)) groundY++;
-            
-            // Jos pudotus on sopiva ja tilaa on tarpeeksi, hyväksytään!
-            if (groundY - y < 80 && groundY - y > 10) {
-                return {x: x, y: groundY - 10}; // Spawnaa hieman maan yläpuolelle
-            }
+            if (groundY - y < 80 && groundY - y > 10) return {x: x, y: groundY - 10}; 
         }
     }
-    // Hätävaraspawni
     return {x: isPlayer1 ? 100 : MAP_W-100, y: 100};
 }
 
@@ -518,42 +841,33 @@ class VisualExplosion{
   }
 }
 
-// REALISTISEMPI VERI (GORE 2.0)
 class Particle {
   constructor(x, y, vx, vy, type) {
     this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.type = type;
-    this.life = type==='smoke' ? 20+Math.random()*20 : Infinity; // Veri ei kuole ajastimeen!
+    this.life = type==='smoke' ? 20+Math.random()*20 : Infinity; 
     this.maxLife = this.life; 
-    this.size = type==='smoke'? 4 : (2 + Math.random()*2); 
+    this.size = type==='smoke'? 4 : (2 + Math.random()*3); 
     this.settled = false;
   }
   update() {
-    if (this.settled) return false; // Poistetaan arraysta, kun lätäkkö on valmis
-    
-    this.vy += GRAVITY * (this.type==='smoke'? -0.05 : 0.4); // Savu nousee, veri putoaa
+    if (this.settled) return false; 
+    this.vy += GRAVITY * (this.type==='smoke'? -0.05 : 0.4); 
     this.x += this.vx; this.y += this.vy;
     
     if(this.type === 'smoke') { 
         this.vx *= 0.9; this.vy *= 0.9; this.size += 0.2; 
-        this.life--;
-        return this.life > 0;
+        this.life--; return this.life > 0;
     }
-    
     if(this.type === 'blood') {
         if(isSolid(this.x, this.y)) {
-            // Osuu seinään tai maahan
-            this.x -= this.vx; this.y -= this.vy; // Peruutetaan hieman ulos kalliosta
-            
-            // Yritetään valua (drip) alaspäin
+            this.x -= this.vx; this.y -= this.vy; 
             if (!isSolid(this.x, this.y + 1)) {
-                this.vx = 0; this.vy = 1; // Valuu suoraan alaspäin hitaasti
+                this.vx = 0; this.vy = 1; 
             } else {
-                // Maassa / Pohjalla: Piirretään pysyvä veritahra bloodCanvakselle!
-                bloodCtx.fillStyle = 'rgba(138, 3, 3, 0.85)'; // Tumma ja paksu veri
-                let splatSize = Math.random() < 0.3 ? this.size + 1.5 : this.size; // Joistain isompia lätäkköjä
+                bloodCtx.fillStyle = 'rgba(138, 3, 3, 0.85)'; 
+                let splatSize = Math.random() < 0.3 ? this.size + 2 : this.size; 
                 bloodCtx.fillRect(Math.floor(this.x), Math.floor(this.y), splatSize, splatSize);
-                
-                this.settled = true; // Valmis, poistetaan aktiivisista partikkeleista
+                this.settled = true; 
                 return false;
             }
         }
@@ -563,13 +877,11 @@ class Particle {
   }
   draw(c) {
     if (this.type === 'smoke') { 
-        c.globalAlpha = this.life / this.maxLife; 
-        c.fillStyle = '#666'; 
+        c.globalAlpha = this.life / this.maxLife; c.fillStyle = '#666'; 
         c.beginPath(); c.arc(Math.floor(this.x), Math.floor(this.y), this.size, 0, Math.PI*2); c.fill(); 
         c.globalAlpha = 1.0;
     } else if (this.type === 'blood' && !this.settled) { 
-        c.fillStyle = '#990000'; 
-        c.fillRect(Math.floor(this.x), Math.floor(this.y), this.size, this.size); 
+        c.fillStyle = '#990000'; c.fillRect(Math.floor(this.x), Math.floor(this.y), this.size, this.size); 
     }
   }
 }
@@ -578,8 +890,10 @@ class Grenade {
   constructor(x, y, vx, vy, ownerId, type) {
     this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.ownerId = ownerId; this.type = type;
     this.life = (type===W_DYNAMITE)? 120 : 90; this.stuck = false;
+    this.rot = 0;
   }
   update() {
+    this.rot += 0.2;
     if(!this.stuck) {
       this.vy += GRAVITY; this.x += this.vx; this.y += this.vy;
       if(isSolid(this.x, this.y)) {
@@ -593,16 +907,28 @@ class Grenade {
       let r = this.type === W_DYNAMITE ? 65 : 45;
       playSound('explosion_bam'); jaggedCarve(this.x, this.y, r, true); renderFullTerrainCanvas();
       visualExplosions.push(new VisualExplosion(this.x, this.y, r)); screenShake=30;
-      explodeAndDamagePlayers(this.x, this.y, r+10, this.ownerId, null, (d)=>(r+10-d)*1.5, 10, 10);
+      
+      players.forEach(p => {
+        if(p.hp>0){
+          const d=Math.hypot(p.x-this.x, p.y-this.y);
+          if(d<r+8){ p.takeDamage((r+10-d)*1.5, this.ownerId); p.vx+=(p.x-this.x)/d*10; p.vy+=(p.y-this.y)/d*10; }
+        }
+      });
       for(let i=0; i<30; i++) particles.push(new Particle(this.x, this.y, (Math.random()-.5)*15, (Math.random()-.5)*15, 'smoke'));
       return false;
     }
     return true;
   }
   draw(c) {
-    c.fillStyle = (this.type === W_DYNAMITE) ? '#FF2222' : '#228B22';
-    c.beginPath(); c.arc(Math.floor(this.x), Math.floor(this.y), 3, 0, Math.PI*2); c.fill();
-    if(this.type === W_DYNAMITE) { c.fillStyle='#FFF'; c.fillRect(Math.floor(this.x)-1, Math.floor(this.y)-4, 2, 3); }
+    c.save(); c.translate(Math.floor(this.x), Math.floor(this.y)); c.rotate(this.rot);
+    if(this.type === W_DYNAMITE) {
+        c.fillStyle = '#FF2222'; c.fillRect(-2, -5, 4, 10);
+        c.fillStyle = '#FFF'; c.fillRect(-2, -1, 4, 2);
+    } else {
+        c.fillStyle = '#228B22'; c.beginPath(); c.arc(0, 0, 4, 0, Math.PI*2); c.fill();
+        c.fillStyle = '#111'; c.fillRect(-1, -5, 2, 3); // Pin
+    }
+    c.restore();
   }
 }
 
@@ -616,6 +942,7 @@ class Bullet {
     let dx = this.vx/steps, dy = this.vy/steps;
     for(let i=0; i<steps; i++) {
       this.x += dx; this.y += dy;
+      if(this.type === W_BAZOOKA && Math.random()<0.2) particles.push(new Particle(this.x, this.y, 0, 0, 'smoke'));
       let hitSolid = isSolid(this.x, this.y);
       if(hitSolid) { this.onHit(null); return false; }
       for(const p of players) {
@@ -635,127 +962,79 @@ class Bullet {
     else if(this.type === W_BAZOOKA) {
       playSound('explosion_bam'); jaggedCarve(x,y,48,true); renderFullTerrainCanvas();
       visualExplosions.push(new VisualExplosion(x,y,48)); screenShake=28;
-      explodeAndDamagePlayers(x,y,55,oid,null,60,9,9);
+      players.forEach(p => {
+        if(p.hp>0){
+          const d=Math.hypot(p.x-x, p.y-y);
+          if(d<55){ p.takeDamage(60, oid); p.vx+=(p.x-x)/d*9; p.vy+=(p.y-y)/d*9; }
+        }
+      });
     }
   }
   draw(c) {
-    if(this.type === W_BAZOOKA) c.fillStyle = '#FF8800'; else c.fillStyle = '#FFD700';
-    c.fillRect(Math.floor(this.x)-1, Math.floor(this.y)-1, 3, 3);
+    if(this.type === W_BAZOOKA) {
+        c.save(); c.translate(Math.floor(this.x), Math.floor(this.y)); c.rotate(Math.atan2(this.vy, this.vx));
+        c.fillStyle = '#888'; c.fillRect(-4, -1, 6, 2);
+        c.fillStyle = '#FF8800'; c.fillRect(2, -1, 3, 2);
+        c.restore();
+    } else {
+        c.fillStyle = '#FFD700'; c.fillRect(Math.floor(this.x)-1, Math.floor(this.y)-1, 3, 3);
+    }
   }
 }
 
 class Player {
-  constructor(id, x, y, color, skinType, isBot = false) {
-    this.id = id; this.x = x; this.y = y; this.color = color; this.skinType = skinType; this.isBot = isBot;
-    this.radius = 4; this.hp = 100; this.lives = 3; 
+  constructor(id, x, y, color, skinType) {
+    this.id = id; this.x = x; this.y = y; this.color = color; this.skinType = skinType;
+    this.radius = 4; this.hp = 100; this.kills = 0;
     this.vx = 0; this.vy = 0; this.aimAngle = 0; this.facingRight = true;
     
-    // Asetetaan aseet ja omat ammukset/lataukset KAIKILLE aseille
     this.weapons = wsLoadouts[id];
     this.weaponIndex = 0; 
     this.ammos = this.weapons.map(w => MAX_AMMO[w]);
     this.reloadTimers = this.weapons.map(w => 0);
     
     this.fireCooldown = 0; this.deathPhase = 'alive'; this.respawnTimer = 0;
-    this.animTimer = 0; this.isWalking = false; 
+    this.animTimer = 0; this.isWalking = false; this.onGround = false;
     
-    // Botti AI parametrit
-    this.botAimOffset = 0; this.botTimer = 0;
-
     buildPlayerSprites(this);
   }
   
   takeDamage(amount, attackerId) {
     if(this.hp <= 0) return;
     this.hp -= amount; playSound('hit');
-    // Enempi verta osumasta (Gore 2.0 lentää voimakkaammin)
-    for(let i=0; i<25; i++) particles.push(new Particle(this.x, this.y, (Math.random()-.5)*15, -Math.random()*12, 'blood'));
+    
+    if(settingGore) {
+        for(let i=0; i<30; i++) particles.push(new Particle(this.x, this.y, (Math.random()-.5)*18, -Math.random()*15, 'blood'));
+    }
+    
     if(this.hp <= 0) {
-      this.hp = 0; this.deathPhase = 'dead'; this.respawnTimer = 180;
+      this.hp = 0; this.deathPhase = 'dead'; this.respawnTimer = 120;
       playSound('explosion_puff');
-      // Kuolinräjähdys verta
-      for(let i=0; i<40; i++) particles.push(new Particle(this.x, this.y, (Math.random()-.5)*20, (Math.random()-.5)*20, 'blood'));
-      if(this.lives > 0) this.lives--;
+      if(settingGore) {
+          for(let i=0; i<50; i++) particles.push(new Particle(this.x, this.y, (Math.random()-.5)*25, (Math.random()-.5)*25, 'blood'));
+      }
+      
+      if(attackerId !== this.id && attackerId !== undefined) {
+          let attacker = players.find(p => p.id === attackerId);
+          if(attacker) attacker.kills++;
+      }
     }
   }
 
   update() {
     if(this.deathPhase === 'dead') {
       this.respawnTimer--;
-      if(this.respawnTimer <= 0 && this.lives > 0) {
-        // Älykäs luolaspawni
+      if(this.respawnTimer <= 0) {
         let spawn = getCaveSpawn(this.id === 0);
         this.x = spawn.x; this.y = spawn.y; this.vx = 0; this.vy = 0; this.hp = 100;
         this.deathPhase = 'alive'; 
-        this.ammos = this.weapons.map(w => MAX_AMMO[w]); // Palauttaa kaikki paukut kuollessa
+        this.ammos = this.weapons.map(w => MAX_AMMO[w]); 
         playSound('spawn');
       }
       return;
     }
 
-    let kLeft=false, kRight=false, kJump=false, kShoot=false, kReload=false, kSwap=false;
-    
-    // ─── PARANNETTU BOTTI AI ───
-    if(this.isBot) {
-      let target = players[0]; // Seuraa aina Pelaaja 1
-      this.botTimer++;
-      if(target && target.hp > 0) {
-        let dx = target.x - this.x, dy = target.y - this.y, dist = Math.hypot(dx, dy);
-        
-        // Vaihtaa tähtäysvirhettä satunnaisesti (epätäydellinen tähtäys)
-        if(this.botTimer % 35 === 0) {
-          this.botAimOffset = (Math.random() - 0.5) * 0.9; 
-        }
-        
-        // Pehmeä tähtäys
-        let targetAngle = Math.atan2(dy, dx) + this.botAimOffset;
-        let angleDiff = targetAngle - this.aimAngle;
-        
-        // Normalize angle diff
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        this.aimAngle += angleDiff * 0.12; // Kääntyy hieman hitaammin ja luonnollisemmin
-        
-        this.facingRight = Math.abs(this.aimAngle) < Math.PI/2;
-        
-        // Liikkuu lähemmäs jos liian kaukana
-        if(dist > 150) { kLeft = dx < -20; kRight = dx > 20; }
-        
-        // Hyppää jos jumissa seinässä
-        if((kLeft || kRight) && Math.abs(this.vx) < 0.1 && isSolid(this.x + (kRight?8:-8), this.y)) kJump = true;
-        
-        // Ampuu vain jos melko lähellä ja katsoo suht oikeaan suuntaan (Reagoi hitaammin kuin aimbot)
-        let realAimDiff = Math.abs(this.aimAngle - Math.atan2(dy, dx));
-        if(dist < 400 && realAimDiff < 0.7 && this.fireCooldown <= 0 && Math.random() < 0.15) kShoot = true;
-        
-        // Lataa heti jos loppu
-        if(this.ammos[this.weaponIndex] <= 0) kReload = true;
-        
-        // Vaihtaa asetta joskus jos lataa
-        if(this.reloadTimers[this.weaponIndex] > 0 && Math.random() < 0.03) kSwap = true;
-      }
-    } 
-    // ─── PELAAJAN KONTROLLIT ───
-    else {
-      const gp = getGamepadInput(this.id);
-      if(activeGamepadIndices[this.id] === 0) { // Oletusnäppis ekalla
-        kLeft=keys.ArrowLeft; kRight=keys.ArrowRight; kJump=keys.ArrowUp; kShoot=keys.Enter; kReload=keys.KeyR; kSwap=keys.KeyQ;
-      }
-      if(gp) {
-        kJump=gpIs(gp,'SELECT'); kShoot=gpBtn(gp,7); kReload=gpIs(gp,'TRIANGLE'); kSwap=gpBtn(gp,4)||gpBtn(gp,6);
-        let ax = gpAx(gp,0), ay = gpAx(gp,1);
-        if(Math.abs(ax)>0.2) { if(ax<0)kLeft=true; else kRight=true; }
-        let rx = gpAx(gp,2), ry = gpAx(gp,3);
-        if(Math.abs(rx)>0.2 || Math.abs(ry)>0.2) {
-          this.aimAngle = Math.atan2(ry, rx);
-          this.facingRight = Math.abs(this.aimAngle) < Math.PI/2;
-        }
-      }
-    }
-
     if(this.fireCooldown > 0) this.fireCooldown--;
-
-    // ─── TAUSTALATAUS (Kaikki aseet päivittyvät) ───
     for(let i=0; i<this.weapons.length; i++) {
       if(this.reloadTimers[i] > 0) {
         this.reloadTimers[i]--;
@@ -763,57 +1042,79 @@ class Player {
       }
     }
 
-    // Aseen Vaihto (vaikka lataisi!)
-    if(kSwap && this.fireCooldown <= 0) {
-      this.weaponIndex = (this.weaponIndex + 1) % this.weapons.length;
-      playSound('switch'); this.fireCooldown = 15;
+    // Vain OMA pelaaja lukee syötteet. Remote pelaaja päivitetään Firebasesta.
+    if(this.id === myPlayerId && gameState === STATE_PLAYING) {
+        let input = getLocalInput();
+        
+        if((input.swapN || input.swapP) && this.fireCooldown <= 0) {
+            if (input.swapN) this.weaponIndex = (this.weaponIndex + 1) % this.weapons.length;
+            if (input.swapP) this.weaponIndex = (this.weaponIndex - 1 + this.weapons.length) % this.weapons.length;
+            playSound('switch'); this.fireCooldown = 15;
+        }
+
+        this.isWalking = false;
+        if(input.left) { this.vx -= 0.6; this.isWalking = true; if(!input.aimActive) this.facingRight = false; }
+        if(input.right){ this.vx += 0.6; this.isWalking = true; if(!input.aimActive) this.facingRight = true; }
+        if(input.aimActive) { this.aimAngle = input.aimAngle; this.facingRight = Math.abs(this.aimAngle) < Math.PI/2; }
+        
+        this.vx *= FRICTION; 
+        
+        if(input.jump && this.onGround) this.vy = -4.5;
+        
+        let wep = this.weapons[this.weaponIndex];
+        let activeAmmo = this.ammos[this.weaponIndex];
+        let activeReload = this.reloadTimers[this.weaponIndex];
+        
+        if(input.reload && activeAmmo < MAX_AMMO[wep] && activeReload <= 0) { 
+            this.reloadTimers[this.weaponIndex] = RELOAD_TIMES[wep]; playSound('reload'); 
+        }
+        
+        if(input.shoot && this.fireCooldown <= 0 && activeAmmo > 0 && activeReload <= 0) {
+            this.ammos[this.weaponIndex]--; 
+            this.fireCooldown = [15, 3, 40, 20, 60, 20, 60, 40, 30, 2, 40, 10, 20, 60, 60, 0, 40, 40, 50, 30, 80][wep];
+            
+            let dirX = Math.cos(this.aimAngle), dirY = Math.sin(this.aimAngle);
+            let spawnX = this.x + dirX*6, spawnY = this.y + dirY*6;
+            
+            // Paikallinen suoritus & Firebase Event
+            sendEvent('shoot', spawnX, spawnY, dirX, dirY, wep);
+            
+            if(wep === W_MINIGUN) { playSound('shoot_minigun'); let spread=(Math.random()-.5)*0.2; bullets.push(new Bullet(spawnX, spawnY, Math.cos(this.aimAngle+spread)*9, Math.sin(this.aimAngle+spread)*9, this.id, wep)); }
+            else if(wep === W_SHOTGUN) { 
+                playSound('shoot_shotgun'); 
+                for(let i=0; i<8; i++) { let spread = (Math.random()-.5)*0.4; bullets.push(new Bullet(spawnX, spawnY, Math.cos(this.aimAngle+spread)*10, Math.sin(this.aimAngle+spread)*10, this.id, wep)); }
+                this.vx -= dirX*3;
+            }
+            else if(wep === W_BAZOOKA) { playSound('explosion_puff'); bullets.push(new Bullet(spawnX, spawnY, dirX*6, dirY*6, this.id, wep)); this.vx -= dirX*3; }
+            else if(wep === W_GRENADE || wep === W_DYNAMITE) { playSound('shoot_handgun'); grenades.push(new Grenade(spawnX, spawnY, dirX*7, dirY*7, this.id, wep)); }
+            else if(wep === W_SHOVEL) {
+                playSound('shovel');
+                let digX = this.x + dirX*12; let digY = this.y + dirY*12;
+                sendEvent('shovel', digX, digY, 0, 0, wep); // Sync destruction
+                jaggedCarve(digX, digY, 15, true); renderFullTerrainCanvas();
+                players.forEach(p => {
+                    if(p.hp > 0 && p.id !== this.id && Math.hypot(p.x - digX, p.y - digY) < 20) {
+                        p.takeDamage(25, this.id); p.vx += dirX * 5; p.vy += dirY * 5;
+                    }
+                });
+            }
+            
+            if(this.ammos[this.weaponIndex] <= 0) { this.reloadTimers[this.weaponIndex] = RELOAD_TIMES[wep]; playSound('reload'); }
+        }
     }
 
-    // Liike
-    this.isWalking = false;
-    if(kLeft) { this.vx -= 0.6; this.isWalking = true; if(this.isBot || !gpIs(getGamepadInput(this.id),'RIGHT')) this.facingRight = false; }
-    if(kRight){ this.vx += 0.6; this.isWalking = true; if(this.isBot || !gpIs(getGamepadInput(this.id),'RIGHT')) this.facingRight = true; }
-    
-    this.vx *= FRICTION; this.vy += GRAVITY;
-    if(kJump && isSolid(this.x, this.y + 6)) this.vy = -4.5;
-
+    // FYSIIKKA (Molemmille, remote jatkaa inertiansa perusteella framejen välillä)
     if(!isSolid(this.x + this.vx, this.y)) this.x += this.vx; else this.vx = 0;
-    if(!isSolid(this.x, this.y + this.vy)) this.y += this.vy; else { this.vy = 0; this.y = Math.floor(this.y); }
     
-    let wep = this.weapons[this.weaponIndex];
-    let activeAmmo = this.ammos[this.weaponIndex];
-    let activeReload = this.reloadTimers[this.weaponIndex];
-    
-    // Latausnappi
-    if(kReload && activeAmmo < MAX_AMMO[wep] && activeReload <= 0) { 
-      this.reloadTimers[this.weaponIndex] = RELOAD_TIMES[wep]; playSound('reload'); 
+    if(!isSolid(this.x, this.y + 1)) {
+        this.vy += GRAVITY; this.onGround = false;
+    } else {
+        if(this.vy > 0) this.vy = 0;
+        this.onGround = true;
     }
     
-    // Ampuminen
-    if(kShoot && this.fireCooldown <= 0 && activeAmmo > 0 && activeReload <= 0) {
-      this.ammos[this.weaponIndex]--; 
-      this.fireCooldown = [15, 3, 40, 20, 60, 20, 60, 40, 30, 2, 40, 10, 20, 60, 60, 0, 40, 40, 50, 30, 80][wep];
-      
-      let dirX = Math.cos(this.aimAngle), dirY = Math.sin(this.aimAngle);
-      let spawnX = this.x + dirX*6, spawnY = this.y + dirY*6;
-      
-      if(wep === W_MINIGUN) { playSound('shoot_minigun'); let spread=(Math.random()-.5)*0.2; bullets.push(new Bullet(spawnX, spawnY, Math.cos(this.aimAngle+spread)*9, Math.sin(this.aimAngle+spread)*9, this.id, wep)); }
-      else if(wep === W_SHOTGUN) { 
-        playSound('shoot_shotgun'); 
-        for(let i=0; i<8; i++) { let spread = (Math.random()-.5)*0.4; bullets.push(new Bullet(spawnX, spawnY, Math.cos(this.aimAngle+spread)*10, Math.sin(this.aimAngle+spread)*10, this.id, wep)); }
-        this.vx -= dirX*3;
-      }
-      else if(wep === W_BAZOOKA) { playSound('explosion_puff'); bullets.push(new Bullet(spawnX, spawnY, dirX*6, dirY*6, this.id, wep)); this.vx -= dirX*3; }
-      else if(wep === W_GRENADE || wep === W_DYNAMITE) { playSound('shoot_handgun'); grenades.push(new Grenade(spawnX, spawnY, dirX*7, dirY*7, this.id, wep)); }
-      else if(wep === W_SHOVEL) {
-        playSound('shovel');
-        let digX = this.x + dirX*12; let digY = this.y + dirY*12;
-        jaggedCarve(digX, digY, 15, true); renderFullTerrainCanvas();
-        explodeAndDamagePlayers(digX, digY, 15, this.id, null, 25, 4, 4);
-      }
-      
-      if(this.ammos[this.weaponIndex] <= 0) { this.reloadTimers[this.weaponIndex] = RELOAD_TIMES[wep]; playSound('reload'); }
-    }
+    if(!isSolid(this.x, this.y + this.vy)) this.y += this.vy; 
+    else { this.vy = 0; this.y = Math.floor(this.y); }
     
     if(this.isWalking) this.animTimer++; else this.animTimer = 0;
     this.x = clamp(this.x, 0, MAP_W-1); this.y = clamp(this.y, 0, MAP_H-1);
@@ -822,38 +1123,40 @@ class Player {
   draw(c) {
     if(this.deathPhase !== 'alive') return;
     c.save(); 
-    
     c.translate(Math.floor(this.x), Math.floor(this.y));
     if(!this.facingRight) c.scale(-1, 1);
     
-    // ANIMAATION KORJAUS: Ei hypi koko ajan, pomppii vain kevyesti kävellessä
     let bounce = (this.isWalking && Math.floor(this.animTimer/6)%2===0) ? -1 : 0;
-    if(this.vy !== 0) bounce = -1;
+    if(!this.onGround) bounce = -1;
     
     c.save(); c.rotate(this.facingRight ? this.aimAngle : Math.PI - this.aimAngle);
-    c.fillStyle = '#555'; c.fillRect(2, bounce-1, 8, 3); c.restore(); // Ase
+    if(this.weapons[this.weaponIndex] === W_SHOVEL) {
+        c.fillStyle = '#8B4513'; c.fillRect(2, bounce, 6, 2);
+        c.fillStyle = '#AAA'; c.fillRect(8, bounce-2, 3, 6);
+    } else {
+        c.fillStyle = '#555'; c.fillRect(2, bounce-1, 8, 3);
+        c.fillStyle = '#222'; c.fillRect(10, bounce, 3, 1); // Piippu
+    }
+    c.restore(); 
 
     let sprite = this.spriteStand;
-    if(this.vy !== 0) sprite = this.spriteJump;
+    if(!this.onGround) sprite = this.spriteJump;
     else if(this.isWalking) sprite = (Math.floor(this.animTimer/6)%2===0) ? this.spriteWalk1 : this.spriteWalk2;
     
     c.drawImage(sprite, -4, -6 + bounce);
     c.restore();
     
-    // HP & Reload Bar (Ei käännetä)
     c.fillStyle = this.color; c.font = "10px 'VT323', monospace"; c.textAlign = 'center';
     c.fillText(PLAYER_NAMES[this.id], Math.floor(this.x), Math.floor(this.y) - 20);
     c.fillStyle = '#F00'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-16, 20, 2);
     c.fillStyle = '#0F0'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-16, Math.max(0, this.hp/100*20), 2);
     
-    // LATAUSPALKKI PÄÄN PÄÄLLÄ
     let rt = this.reloadTimers[this.weaponIndex];
     let maxRt = RELOAD_TIMES[this.weapons[this.weaponIndex]];
     if(rt > 0 && maxRt > 0) {
        c.fillStyle = '#333'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-25, 20, 3);
        c.fillStyle = '#FFEB3B'; c.fillRect(Math.floor(this.x)-10, Math.floor(this.y)-25, 20 * (1 - rt/maxRt), 3);
     }
-    
     c.textAlign = 'left';
   }
 }
@@ -863,47 +1166,61 @@ function initGame(genNew) {
   if(genNew) { generateTerrain(); }
   players = []; bullets.length=0; grenades.length=0; particles.length=0; visualExplosions.length=0;
   
-  // Pelaaja 1 (Vasen puoli luolaa)
   let sp1 = getCaveSpawn(true);
-  players.push(new Player(0, sp1.x, sp1.y, PLAYER_COLORS[0], customizeSkins[0], false));
-  
-  // Botti (Oikea puoli luolaa)
+  players.push(new Player(0, sp1.x, sp1.y, PLAYER_COLORS[0], customizeSkins[0]));
   let sp2 = getCaveSpawn(false);
-  players.push(new Player(1, sp2.x, sp2.y, PLAYER_COLORS[1], customizeSkins[1], true));
-  
-  gameState = STATE_COUNTDOWN;
+  players.push(new Player(1, sp2.x, sp2.y, PLAYER_COLORS[1], customizeSkins[1]));
 }
 
 function updatePlaying() {
-  if(keys.Escape || (getGamepadInput(0) && gpIs(getGamepadInput(0),'BACK'))) { gameState = STATE_MENU; playSound('click'); return; }
+  if(keys.Escape || (getGamepadInput(0) && gpIs(getGamepadInput(0),'START'))) { 
+      gameState = STATE_PAUSED; playSound('click'); keys.Escape=false; return; 
+  }
   
+  // Game logic updates
   players.forEach(p => p.update());
   for(let i=bullets.length-1; i>=0; i--) if(!bullets[i].update()) bullets.splice(i,1);
   for(let i=grenades.length-1; i>=0; i--) if(!grenades[i].update()) grenades.splice(i,1);
   for(let i=particles.length-1; i>=0; i--) if(!particles[i].update()) particles.splice(i,1);
   for(let i=visualExplosions.length-1; i>=0; i--) if(!visualExplosions[i].update()) visualExplosions.splice(i,1);
 
-  let aliveTeams = players.filter(p => p.hp > 0 || p.lives > 0);
-  if(aliveTeams.length <= 1 && players.length > 1) {
-    matchWinnerId = aliveTeams.length === 1 ? aliveTeams[0].id : -1;
+  // Sync to Firebase
+  mpSyncTimer++;
+  if(mpSyncTimer > 2) { // ~30Hz sync
+      syncMultiplayer(); mpSyncTimer = 0;
+  }
+
+  // Win condition
+  let winner = players.find(p => p.kills >= lobbyKillsToWin);
+  if(winner) {
+    matchWinnerId = winner.id;
     gameState = STATE_VICTORY; victoryTimer = 300; playWinMusic();
   }
 }
 
 function drawPlaying() {
-  ctx.fillStyle = '#3B83BD'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   
-  // ─── KAMERA LUKITTU PELAAJA 1 ───
-  let target = players[0];
-  let camX = clamp(target.x - VIEW_W/2, 0, MAP_W - VIEW_W);
-  let camY = clamp(target.y - VIEW_H/2, 0, MAP_H - VIEW_H);
+  // ─── PERFECT CAMERA LOCK ───
+  let target = players[myPlayerId]; // Seuraa AINA omaa pelaajaa
+  let camX = target.x - VIEW_W/2;
+  let camY = target.y - VIEW_H/2;
 
   if(screenShake > 0) { camX += (Math.random()-.5)*screenShake; camY += (Math.random()-.5)*screenShake; screenShake *= 0.8; if(screenShake<1) screenShake=0; }
   
   ctx.save(); ctx.scale(SCALE, SCALE); ctx.translate(Math.floor(-camX), Math.floor(-camY));
-  drawBgNoise();
+  
+  const pat = ctx.createPattern(bgNoiseCanvas, 'repeat');
+  ctx.fillStyle = pat; ctx.fillRect(0,0,MAP_W,MAP_H);
+  
+  if(settingShadows) {
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4;
+  }
+  
   ctx.drawImage(mapCanvas, 0, 0); 
-  ctx.drawImage(bloodCanvas, 0, 0); // Pysyvä veri Overlay!
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+  
+  if(settingGore) ctx.drawImage(bloodCanvas, 0, 0);
   
   grenades.forEach(g => g.draw(ctx));
   players.forEach(p => p.draw(ctx));
@@ -913,13 +1230,14 @@ function drawPlaying() {
   
   ctx.restore();
   
-  // ─── HUD ───
-  ctx.fillStyle = '#000'; ctx.fillRect(0, CANVAS_H - HUD_H, CANVAS_W, HUD_H);
-  ctx.fillStyle = '#FFF'; ctx.font = "16px 'VT323', monospace";
+  // ─── MINI-HUD ALAREUNASSA ───
+  ctx.fillStyle = '#111'; ctx.fillRect(0, CANVAS_H - HUD_H, CANVAS_W, HUD_H);
+  ctx.fillStyle = '#FFF'; ctx.font = "20px 'VT323', monospace";
+  
   players.forEach((p, i) => {
-    let px = 20 + i * (CANVAS_W - 140); // Piirretään reunoille (vasen p1, oikea botti)
-    ctx.fillStyle = p.color; ctx.fillText(PLAYER_NAMES[p.id], px, CANVAS_H - 40);
-    ctx.fillStyle = '#FFF'; ctx.fillText(`HP: ${Math.floor(p.hp)}  LIVES: ${p.lives}`, px, CANVAS_H - 22);
+    let px = 20 + i * (CANVAS_W - 320); 
+    ctx.fillStyle = p.color; ctx.fillText(PLAYER_NAMES[p.id] + (p.id===myPlayerId?" (YOU)":""), px, CANVAS_H - 28);
+    ctx.fillStyle = '#FFF'; ctx.fillText(`HP: ${Math.floor(p.hp)} | KILLS: ${p.kills}/${lobbyKillsToWin}`, px, CANVAS_H - 10);
     
     let wep = p.weapons[p.weaponIndex];
     let ammo = p.ammos[p.weaponIndex];
@@ -927,34 +1245,85 @@ function drawPlaying() {
     
     let wepText = `${WEAPON_NAMES[wep][currentLang]}: ${rt>0 ? 'RELOADING' : (wep===W_SHOVEL?'INF':ammo)}`;
     ctx.fillStyle = rt > 0 ? '#FFEB3B' : '#FFF';
-    ctx.fillText(wepText, px, CANVAS_H - 5);
+    ctx.fillText(wepText, px + 150, CANVAS_H - 28);
   });
+
+  // PING DISPLAY
+  ctx.fillStyle = '#0f0'; ctx.textAlign = 'right'; ctx.fillText(`PING: ${pingMs}ms`, CANVAS_W - 10, 20); ctx.textAlign = 'left';
 }
 
-function gameLoop() {
-  if(navigator.getGamepads) navigator.getGamepads(); 
+// ─── 60 FPS GAME LOOP ───
+let lastTime = 0;
+function gameLoop(timestamp) {
+  requestAnimationFrame(gameLoop);
+  if (timestamp - lastTime < 16) return; 
+  lastTime = timestamp;
 
-  if(gameState === STATE_MENU || gameState === STATE_OPTIONS) {
+  if(!isFirebaseReady && gameState === STATE_MENU) {
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+      ctx.fillStyle = '#F00'; ctx.font = "30px 'VT323', monospace"; ctx.textAlign = 'center';
+      ctx.fillText("FIREBASE CONFIG PUUTTUU KÄSITKIRJOITUKSESTA!", CANVAS_W/2, CANVAS_H/2);
+      ctx.fillStyle = '#FFF'; ctx.fillText("Katso HTML-tiedoston alku ja aseta config.", CANVAS_W/2, CANVAS_H/2 + 40);
+      return;
+  }
+
+  if(gameState === STATE_MENU || gameState === STATE_OPTIONS || gameState === STATE_MP_MENU) {
     handleMenuInput();
     ctx.fillStyle = '#1a0f06'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-    ctx.fillStyle = '#FFF'; ctx.font = "40px 'VT323', monospace"; ctx.textAlign = 'center';
-    ctx.fillText(t('WEBLIERO'), CANVAS_W/2, 60);
-    ctx.font = "24px 'VT323', monospace";
+    ctx.fillStyle = '#FFF'; ctx.font = "50px 'VT323', monospace"; ctx.textAlign = 'center';
+    ctx.fillText(t('WEBLIERO'), CANVAS_W/2, 100);
+    
+    // Online Counter
+    ctx.font = "20px 'VT323', monospace"; ctx.fillStyle = '#0F0';
+    ctx.fillText(`PELAAJIA ONLINE: ${onlineCount}`, CANVAS_W/2, 140);
+
+    ctx.font = "28px 'VT323', monospace";
     
     if(gameState === STATE_MENU) {
       mainMenuOptions.forEach((opt, i) => {
         ctx.fillStyle = i === mainMenuSel ? '#0F0' : '#FFF';
-        ctx.fillText(i === mainMenuSel ? `> ${t(opt)} <` : t(opt), CANVAS_W/2, 130 + i*40);
+        ctx.fillText(i === mainMenuSel ? `> ${t(opt)} <` : t(opt), CANVAS_W/2, 200 + i*50);
+      });
+    } else if(gameState === STATE_MP_MENU) {
+      mpMenuOptions.forEach((opt, i) => {
+        ctx.fillStyle = i === mpMenuSel ? '#0F0' : '#FFF';
+        ctx.fillText(i === mpMenuSel ? `> ${t(opt)} <` : t(opt), CANVAS_W/2, 200 + i*50);
       });
     } else if(gameState === STATE_OPTIONS) {
       gfxMenuOptions.forEach((opt, i) => {
+        let text = t(opt);
+        if(opt==="MUSIC") text = t("MUSIC") + (settingMusic?"ON":"OFF");
+        if(opt==="GORE") text = t("GORE") + (settingGore?"ON":"OFF");
+        if(opt==="SHADOWS") text = t("SHADOWS") + (settingShadows?"ON":"OFF");
+        
         ctx.fillStyle = i === optionsMenuSel ? '#0F0' : '#FFF';
-        ctx.fillText(i === optionsMenuSel ? `> ${t(opt)} <` : t(opt), CANVAS_W/2, 130 + i*40);
+        ctx.fillText(i === optionsMenuSel ? `> ${text} <` : text, CANVAS_W/2, 200 + i*50);
       });
     }
     ctx.textAlign = 'left';
   } 
+  else if (gameState === STATE_LOBBY_WAIT) {
+      ctx.fillStyle = '#1a0f06'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+      ctx.fillStyle = '#FFD700'; ctx.font = "40px 'VT323', monospace"; ctx.textAlign = 'center';
+      ctx.fillText(t('WAITING'), CANVAS_W/2, CANVAS_H/2);
+      ctx.textAlign = 'left';
+  }
   else if (gameState === STATE_PLAYING) { updatePlaying(); drawPlaying(); }
+  else if (gameState === STATE_PAUSED) { 
+      // Peli jatkuu taustalla moninpelissä!
+      drawPlaying(); 
+      handleMenuInput(); // Tämä hoitaa pausesta poistumisen ja valikon liikkumisen
+      
+      ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+      ctx.fillStyle = '#FFF'; ctx.font = "50px 'VT323', monospace"; ctx.textAlign = 'center';
+      ctx.fillText(t('GAME_PAUSED'), CANVAS_W/2, CANVAS_H/2 - 50);
+      ctx.font = "30px 'VT323', monospace";
+      pauseMenuOptions.forEach((opt, i) => {
+          ctx.fillStyle = i === pauseMenuSel ? '#0F0' : '#FFF';
+          ctx.fillText(i === pauseMenuSel ? `> ${t(opt)} <` : t(opt), CANVAS_W/2, CANVAS_H/2 + 20 + i*50);
+      });
+      ctx.textAlign = 'left';
+  }
   else if (gameState === STATE_COUNTDOWN) { 
     drawPlaying(); 
     countdownTimer--; 
@@ -964,31 +1333,36 @@ function gameLoop() {
     }
     if(countdownValue>=0) {
       ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-      ctx.fillStyle='#FFF'; ctx.font="60px 'VT323', monospace"; ctx.textAlign='center';
+      ctx.fillStyle='#FFF'; ctx.font="80px 'VT323', monospace"; ctx.textAlign='center';
       ctx.fillText(countdownValue>0?countdownValue:"GO!", CANVAS_W/2, CANVAS_H/2);
       ctx.textAlign='left';
     }
   }
   else if (gameState === STATE_VICTORY) {
     drawPlaying();
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-    ctx.fillStyle = '#FFD700'; ctx.font = "40px 'VT323', monospace"; ctx.textAlign = 'center';
-    let text = matchWinnerId >= 0 ? `${PLAYER_NAMES[matchWinnerId]} ${t('WINS_MATCH')}` : "DRAW!";
+    ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    ctx.fillStyle = '#FFD700'; ctx.font = "50px 'VT323', monospace"; ctx.textAlign = 'center';
+    
+    let text = (matchWinnerId === myPlayerId) ? "VOITIT PELIN!" : "HÄVISIT PELIN!";
+    
     ctx.fillText(text, CANVAS_W/2, CANVAS_H/2);
-    ctx.font = "20px 'VT323', monospace"; ctx.fillStyle = '#FFF';
-    ctx.fillText("Press X to return", CANVAS_W/2, CANVAS_H/2 + 40);
+    ctx.font = "24px 'VT323', monospace"; ctx.fillStyle = '#FFF';
+    ctx.fillText("Poistutaan valikkoon...", CANVAS_W/2, CANVAS_H/2 + 50);
     ctx.textAlign = 'left';
+    
     victoryTimer--;
-    if(victoryTimer <= 0 || keys.Enter || (getGamepadInput(0)&&gpIs(getGamepadInput(0),'SELECT'))) {
-      gameState = STATE_MENU; startMenuMusic(); lastInputTime = Date.now() + 200;
-    }
+    if(victoryTimer <= 0) leaveGame(); // Palaa valikkoon
+  }
+  else if (gameState === STATE_DISCONNECT) {
+      ctx.fillStyle = '#1a0f06'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+      ctx.fillStyle = '#F00'; ctx.font = "40px 'VT323', monospace"; ctx.textAlign = 'center';
+      ctx.fillText("TOINEN PELAAJA POISTUI PELISTÄ.", CANVAS_W/2, CANVAS_H/2);
+      ctx.textAlign = 'left';
   }
   
   if(fadeAlpha > 0) { ctx.fillStyle = `rgba(0,0,0,${fadeAlpha})`; ctx.fillRect(0,0,CANVAS_W,CANVAS_H); }
-  requestAnimationFrame(gameLoop);
 }
 
-startMenuMusic();
 requestAnimationFrame(gameLoop);
 
 </script>
