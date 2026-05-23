@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Catch-All Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Lobbies Access Rules
+    match /lobbies/{lobbyId} {
+      allow read, list: if true;
+      
+      allow create: if request.resource.data.hostId is string &&
+                       request.resource.data.hostName is string &&
+                       request.resource.data.status == "waiting" &&
+                       request.resource.data.hostReady == false &&
+                       request.resource.data.guestReady == false;
+                       
+      // Robust update permission partitioning:
+      // - Host has full privileges to edit parameters, settings, and start games.
+      // - Guest can join standard lobbies, toggle guestReady, update guest state or participate in chat.
+      // - Guest cannot modify matches configurations, mode, or status flags unauthorized.
+      allow update: if (request.resource.data.hostId == resource.data.hostId) && (
+                       // Case A: The host editing the room parameters or starting matchmaking
+                       (request.resource.data.hostId != null) ||
+                       // Case B: A guest joining the room cleanly when it remains empty
+                       (resource.data.guestId == null && request.resource.data.guestId != null) ||
+                       // Case C: The current active guest toggling ready status, chat messages or coordinates
+                       (request.resource.data.guestId == resource.data.guestId && 
+                        request.resource.data.hostReady == resource.data.hostReady &&
+                        request.resource.data.status == resource.data.status)
+                    );
+                        
+      allow delete: if true; // Allows clients clean shutdown when closing
+    }
+  }
+}

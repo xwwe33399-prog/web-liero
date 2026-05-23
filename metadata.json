@@ -1,0 +1,6 @@
+{
+  "name": "PunkkiGAME v8",
+  "description": "An action-packed 2D shooter with real-time combat, ninja ropes, custom level editing, and multiplayer features.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

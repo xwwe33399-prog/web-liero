@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Lobby": {
+      "title": "Lobby",
+      "description": "An online game lobby containing matchmaking parameters, state, and participant profiles.",
+      "type": "object",
+      "properties": {
+        "hostName": { "type": "string", "description": "The custom username of the lobby master." },
+        "hostId": { "type": "string", "description": "A unique client-side generated identifier for the host." },
+        "hostReady": { "type": "boolean", "description": "Ready status of the host." },
+        "guestName": { "type": "string", "description": "The custom username of the secondary player." },
+        "guestId": { "type": "string", "description": "A unique client-side generated identifier for the guest." },
+        "guestReady": { "type": "boolean", "description": "Ready status of the guest." },
+        "status": { "type": "string", "description": "Matching status, e.g. waiting, playing, or closed." },
+        "gameMode": { "type": "string", "description": "The current configured game mode." },
+        "settings": { "type": "object", "description": "Complex map of custom round attributes like score limits or active levels." },
+        "p1": { "type": "object", "description": "Host player real-time state sync payload." },
+        "p2": { "type": "object", "description": "Guest player real-time state sync payload." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Lobby configuration creation time." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Lobby heartbeat update time." }
+      },
+      "required": ["hostName", "hostId", "status", "gameMode", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/lobbies/{lobbyId}": {
+      "schema": "Lobby",
+      "description": "Collection of matchable game lobbies available or running."
+    }
+  }
+}
